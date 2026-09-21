@@ -2067,9 +2067,7 @@ const Bridge = {
         else msgs.unshift({ role: 'system', content: add.trim() });
       }
     }
-    const role = Roles.byId(roleId);
-    const options = Object.assign({ temp: role && role.settings ? role.settings.chat.temp : CHAT_DEFAULT.temp }, opt || {});
-    return await aiRequest(msgs, options);
+    return await aiRequest(msgs, opt);
   },
 
   /* 识图：标准 OpenAI 多模态，图片 base64 直接进 content 数组 */
@@ -2201,23 +2199,13 @@ const Roles = {
     return r;
   },
   async remove(id) {
-    if (roleSwitchBlocked() || this.list.length <= 1 || !this.byId(id)) return false;
-    Chat.switching = true;
-    try {
-      const rid = String(id);
-      this.list = this.list.filter(r => r.id !== rid);
-      Chat.drafts.delete(rid);
-      const next = this.byId(this.activeId) || this.list[0];
-      await Chat.open(next.id);
-      Chat.switching = true;
-      await this.save();
-      await saveCfg();
-      await Store.remove('msg:' + rid);
-      await Store.remove('mem:' + rid);
-      await Store.remove('wb:' + rid);
-      chatView = 'list';
-      return true;
-    } finally { Chat.switching = false; }
+    this.list = this.list.filter(r => r.id !== String(id));
+    if (this.activeId === String(id)) this.activeId = (this.list[0] && this.list[0].id) || '';
+    await this.save();
+    /* 连带清掉他的聊天、记忆、世界书 */
+    await Store.remove('msg:' + id);
+    await Store.remove('mem:' + id);
+    await Store.remove('wb:' + id);
   }
 };
 
@@ -2264,7 +2252,7 @@ function useRoleSettings(role) {
 }
 async function saveMe() { await Roles.save(); }
 function roleSwitchBlocked() {
-  if (Chat.busy || Chat.summarizing || Chat.switching || Chat.saving) {
+  if (Chat.busy || Chat.summarizing || Chat.switching) {
     toast('请等待当前回复、总结或角色切换完成');
     return true;
   }
@@ -2275,8 +2263,10 @@ async function openRoleSettings(roleId) {
   if (!role || roleSwitchBlocked()) return;
   Chat.switching = true;
   try {
+    Roles.activeId = role.id;
+    S.charId = role.id;
+    S.charName = role.name;
     await Chat.open(role.id);
-    Chat.switching = true;
     await Roles.save();
     await saveCfg();
     chatView = 'list';
@@ -2307,12 +2297,7 @@ function setupSettingsPages() {
   save.onclick = () => saveSettingsPage(false);
 }
 async function saveSettingsPage(privatePage) {
-  if (privatePage && roleSwitchBlocked()) return;
-  const rid = Chat.cur;
-  if (privatePage && $('#pgRoleSet').dataset.roleId !== rid) return toast('请重新打开当前角色设置');
   const button = $(privatePage ? '#saveRoleSettings' : '#saveGlobalSettings');
-  const worldBook = WB.slice(), memories = MEM.slice();
-  if (privatePage) Chat.saving = true;
   button.disabled = true;
   try {
     if (privatePage) {
@@ -2331,8 +2316,8 @@ async function saveSettingsPage(privatePage) {
       Look.aiText = $('#aiTextColor').value;
       Look.meText = $('#meTextColor').value;
       await Roles.save();
-      await saveWb(rid, worldBook);
-      await saveMem(rid, memories);
+      await saveWb();
+      await saveMem();
       applyChatLook();
     } else {
       await saveAIFromForm();
@@ -2340,7 +2325,7 @@ async function saveSettingsPage(privatePage) {
     }
     toast(privatePage ? '当前角色设置已保存' : '通用设置已保存');
   } catch (e) { toast('保存失败：' + humanErr(e)); }
-  finally { button.disabled = false; if (privatePage) Chat.saving = false; }
+  finally { button.disabled = false; }
 }
 
 /* ---------- 聊天记录 ----------
@@ -2354,41 +2339,18 @@ const Chat = {
   busy: false,          // 正在等 AI 回复
   abort: null,          // AbortController
 
-  switching: false,
-  saving: false,
-  summarizing: false,
-  openVersion: 0,
-  drafts: new Map(),
   async open(roleId) {
-    const rid = String(roleId || '');
-    const role = Roles.byId(rid);
-    if (!role) throw new Error('角色不存在');
-    if (this.busy || this.summarizing) throw new Error('请等待当前回复或总结完成');
-    const version = ++this.openVersion;
-    this.switching = true;
-    try {
-      const values = await Promise.all(['msg:', 'wb:', 'mem:'].map(k => Store.get(k + rid)));
-      if (version !== this.openVersion || Roles.byId(rid) !== role) return null;
-      const arrays = values.map(v => { const a = dec(v, []); return Array.isArray(a) ? a : []; });
-      const input = $('#chatInput');
-      if (input && this.cur) this.drafts.set(this.cur, input.value);
-      this.cur = rid;
-      this.msgs = arrays[0];
-      WB = arrays[1];
-      MEM = arrays[2];
-      normalizeMessages(this.msgs, MEM);
-      Roles.activeId = rid;
-      S.charId = rid;
-      S.charName = role.name;
-      useRoleSettings(role);
-      if (input) { input.value = this.drafts.get(rid) || ''; input.style.height = 'auto'; }
-      applyChatLook();
-      return this.msgs;
-    } finally { if (version === this.openVersion) this.switching = false; }
+    this.cur = String(roleId || '');
+    this.msgs = dec(await Store.get('msg:' + this.cur), []) || [];
+    if (!Array.isArray(this.msgs)) this.msgs = [];
+    useRoleSettings(Roles.byId(this.cur));
+    await loadWb();
+    await loadMem();
+    applyChatLook();
+    return this.msgs;
   },
   async persist() {
-    if (!Roles.byId(this.cur)) return;
-    normalizeMessages(this.msgs);
+    if (!this.cur) return;
     /* 只留最近 400 条，避免无限膨胀 */
     if (this.msgs.length > 400) this.msgs = this.msgs.slice(-400);
     await Store.set('msg:' + this.cur, enc(this.msgs));
@@ -2397,17 +2359,13 @@ const Chat = {
   /* 往指定角色（不一定是当前打开的）追加一条 */
   async pushTo(roleId, m) {
     const rid = String(roleId);
-    if (!Roles.byId(rid)) return;
     if (rid === this.cur) {
       this.msgs.push(m);
       await this.persist();
       if (typeof drawMsgs === 'function') drawMsgs();
     } else {
       const arr = dec(await Store.get('msg:' + rid), []) || [];
-      if (!Roles.byId(rid)) return;
-      normalizeMessages(arr);
       arr.push(m);
-      normalizeMessages(arr);
       if (arr.length > 400) arr.splice(0, arr.length - 400);
       await Store.set('msg:' + rid, enc(arr));
     }
@@ -2443,16 +2401,18 @@ const Chat = {
   },
 
   async switchTo(roleId) {
-    if (roleSwitchBlocked()) return;
-    await openRoom(roleId);
+    Roles.activeId = String(roleId);
+    await Roles.save();
+    await this.open(roleId);
     if (typeof drawChatList === 'function') drawChatList();
+    if (typeof drawMsgs === 'function') drawMsgs();
   }
 };
 
 /* {{char}} / {{user}} 占位替换 */
 function applyVars(str, role) {
   const cn = (role && role.name) || '他';
-  const un = ((role && role.settings ? role.settings.me : Me).name || '你');
+  const un = (Me.name || '你');
   return String(str || '')
     .replace(/\{\{char\}\}/gi, cn)
     .replace(/\{\{user\}\}/gi, un);
@@ -2497,10 +2457,7 @@ const Store = (() => {
       try { t = idb.transaction(STORE, mode); } catch (e) { return rej(e); }
       let rq;
       try { rq = fn(t.objectStore(STORE)); } catch (e) { return rej(e); }
-      let result;
-      rq.onsuccess = () => { result = rq.result; };
-      t.oncomplete = () => res(result);
-      t.onerror = () => rej(t.error || new Error('tx failed'));
+      rq.onsuccess = () => res(rq.result);
       rq.onerror = () => rej(rq.error);
       t.onabort = () => rej(t.error || new Error('tx aborted'));
     });
@@ -3556,11 +3513,7 @@ async function hardDel(id) {
 
 /* ------------------------- 7. 抽屉 ------------------------- */
 function openDw(sel) { $('#mask').classList.add('open'); $(sel).classList.add('open'); }
-function closeDw() {
-  RoleEditor.session++;
-  $('#mask').classList.remove('open');
-  $$('.drawer').forEach(d => d.classList.remove('open'));
-}
+function closeDw() { $('#mask').classList.remove('open'); $$('.drawer').forEach(d => d.classList.remove('open')); }
 
 function drawCatSelect() {
   const sel = $('#fCat');
@@ -3974,8 +3927,9 @@ async function drawChars() {
       if (roleSwitchBlocked()) return;
       Chat.switching = true;
       try {
+        S.charId = id; S.charName = name;
+        Roles.activeId = id;
         await Chat.open(id);
-        Chat.switching = true;
         await Roles.save();
         await saveCfg();
         chatView = 'list';
@@ -5178,8 +5132,6 @@ async function saveAIFromForm() {
 }
 
 function drawSettings() {
-  $('#pgRoleSet').dataset.roleId = Chat.cur;
-  $('#roleSettingsTitle').textContent = (Roles.active ? Roles.active.name : '') + ' · 私人设置';
   /* —— 接口 —— */
   const ps = $('#apiPreset');
   if (ps) {
@@ -5300,8 +5252,10 @@ function drawRoleList() {
       if (roleSwitchBlocked()) return;
       if (Roles.list.length <= 1) return toast('至少留一位');
       if (!confirm('删掉「' + (r.name || '这位') + '」？他的聊天记录和记忆也会一起删掉。')) return;
-      if (!await Roles.remove(r.id)) return;
-      drawSettings();
+      await Roles.remove(r.id);
+      if (S.charId === r.id) S.charId = Roles.activeId;
+      if (Chat.cur === r.id) { chatView = 'list'; }
+      await Chat.open(Roles.activeId);
       drawRoleList(); drawChatList(); drawMsgs();
       try { await drawChars(); } catch (e) {}
       toast('已删除');
@@ -5316,13 +5270,6 @@ function drawRoleList() {
 }
 
 /* 给某个角色换头像 */
-const imageJobs = new WeakMap();
-function beginImageJob(target, field) {
-  const jobs = imageJobs.get(target) || {};
-  imageJobs.set(target, jobs);
-  const token = jobs[field] = (jobs[field] || 0) + 1;
-  return () => jobs[field] === token;
-}
 let avatarTargetRole = '';
 function pickAvatarFor(roleId) {
   avatarTargetRole = roleId;
@@ -5367,13 +5314,9 @@ const RoleEditor = {
     openDw('#dwRole');
   },
   pendingAvatar: '',
-  session: 0,
   async confirm() {
-    if (roleSwitchBlocked()) return;
     const name = $('#roName').value.trim();
     if (!name) return toast('给他起个名字');
-    const id = this.id;
-    if (id && !Roles.byId(id)) return toast('角色已删除');
     const patch = {
       name: name,
       prompt: $('#roPrompt').value,
@@ -5381,48 +5324,46 @@ const RoleEditor = {
       bubble: $('#roBubble').value || '#1b1b20'
     };
     if (this.pendingAvatar) patch.avatar = this.pendingAvatar;
-    Chat.saving = true;
-    $('#roleSave').disabled = true;
-    try {
-      if (id) {
-        await Roles.update(id, patch);
-        if (id === Chat.cur) S.charName = name;
-      } else {
-        const r = await Roles.add(patch);
-        await Chat.open(r.id);
-        chatView = 'list';
-      }
+
+    if (this.id) {
+      await Roles.update(this.id, patch);
+    } else {
+      const r = await Roles.add(patch);
+      Roles.activeId = r.id;
+      S.charId = r.id;
+      S.charName = r.name;
       await Roles.save();
       await saveCfg();
-      closeDw();
-      drawSettings(); drawChatList(); drawWb(); drawMem();
-      if (chatView === 'room' && Chat.cur) {
-        const cr = Roles.byId(Chat.cur);
+      await Chat.open(r.id);
+    }
+    closeDw();
+    drawRoleList(); drawChatList();
+    /* 正在跟他聊就顺手把聊天室头部也更新了 */
+    if (chatView === 'room' && Chat.cur) {
+      const cr = Roles.byId(Chat.cur);
+      if (cr) {
         $('#roomAvatar').src = cr.avatar || defaultAvatar(cr.name, '#3a2f38');
         $('#roomName').textContent = cr.name || '未命名';
-        drawMsgs();
       }
-      await drawChars();
-      toast('已保存');
-    } catch (e) { toast('角色保存失败：' + humanErr(e)); }
-    finally { Chat.saving = false; $('#roleSave').disabled = false; }
+      drawMsgs();
+    }
+    try { await drawChars(); } catch (e) {}
+    toast('已保存');
   }
 };
 
 /* ---------- 世界书 ---------- */
 let WB = [];
 async function loadWb() {
-  const rid = Chat.cur, version = Chat.openVersion;
-  const data = rid ? dec(await Store.get('wb:' + rid), []) : [];
-  if (rid === Chat.cur && version === Chat.openVersion && !Chat.switching) WB = Array.isArray(data) ? data : [];
+  const rid = Roles.activeId;
+  WB = rid ? (dec(await Store.get('wb:' + rid), []) || []) : [];
+  if (!Array.isArray(WB)) WB = [];
 }
-async function saveWb(rid = Chat.cur, entries = WB) {
-  if (!Roles.byId(rid)) return;
-  await Store.set('wb:' + rid, enc(entries));
+async function saveWb() {
+  if (!Roles.activeId) return;
+  await Store.set('wb:' + Roles.activeId, enc(WB));
 }
 function drawWb() {
-  const rid = Chat.cur, entries = WB;
-  const editable = () => !Chat.switching && !Chat.saving && rid === Chat.cur && entries === WB;
   const box = $('#wbList');
   if (!box) return;
   box.innerHTML = '';
@@ -5444,21 +5385,11 @@ function drawWb() {
     b.textContent = w.name || '未命名条目';
     const tg = document.createElement('button');
     tg.className = 'tgl' + (w.enabled === false ? '' : ' on');
-    tg.onclick = async () => {
-      if (!editable()) return;
-      w.enabled = (w.enabled === false);
-      await saveWb(rid, entries);
-      if (editable()) drawWb();
-    };
+    tg.onclick = async () => { w.enabled = (w.enabled === false); await saveWb(); drawWb(); };
     const del = document.createElement('button');
     del.textContent = '✕';
     del.style.cssText = 'background:none;border:none;color:#ff6b6b;font-size:13px;cursor:pointer';
-    del.onclick = async () => {
-      if (!editable() || entries.indexOf(w) < 0) return;
-      entries.splice(entries.indexOf(w), 1);
-      await saveWb(rid, entries);
-      if (editable()) drawWb();
-    };
+    del.onclick = async () => { WB.splice(i, 1); await saveWb(); drawWb(); };
     hd.appendChild(b); hd.appendChild(tg); hd.appendChild(del);
 
     const kw = document.createElement('div');
@@ -5470,8 +5401,8 @@ function drawWb() {
 
     el.appendChild(hd); el.appendChild(kw); el.appendChild(ct);
     el.onclick = (e) => {
-      if (e.target === tg || e.target === del || !editable()) return;
-      WbEditor.open(entries.indexOf(w));
+      if (e.target === tg || e.target === del) return;
+      WbEditor.open(i);
     };
     box.appendChild(el);
   });
@@ -5479,15 +5410,9 @@ function drawWb() {
 
 const WbEditor = {
   idx: -1,
-  roleId: '',
-  entries: null,
   open(i) {
-    if (Chat.switching || Chat.saving) return;
-    this.roleId = Chat.cur;
-    this.entries = WB;
     this.idx = (i == null ? -1 : i);
     const w = this.idx >= 0 ? WB[this.idx] : null;
-    this.entry = w;
     $('#wbEditTitle').textContent = w ? '编辑条目' : '新增条目';
     $('#wbName').value = w ? (w.name || '') : '';
     $('#wbKeys').value = w ? (w.keywords || []).join('，') : '';
@@ -5497,8 +5422,6 @@ const WbEditor = {
     openDw('#dwWb');
   },
   async confirm() {
-    if (this.busy || Chat.switching || Chat.saving || this.roleId !== Chat.cur || this.entries !== WB) return toast('角色已切换，请重新打开条目');
-    if (this.entry && WB.indexOf(this.entry) < 0) return toast('条目已删除，请重新打开');
     const name = $('#wbName').value.trim();
     const content = $('#wbContent').value.trim();
     if (!content) return toast('内容不能为空');
@@ -5510,31 +5433,25 @@ const WbEditor = {
       constant: $('#wbConst').checked,
       enabled: true
     };
-    if (this.entry) Object.assign(this.entry, w);
+    if (this.idx >= 0) WB[this.idx] = Object.assign(WB[this.idx], w);
     else WB.push(w);
-    const rid = this.roleId, entries = this.entries;
-    this.busy = true;
-    try {
-      await saveWb(rid, entries);
-      if (Chat.cur === rid && WB === entries) {
-        closeDw();
-        drawWb();
-        toast('已保存');
-      }
-    } finally { this.busy = false; }
+    await saveWb();
+    closeDw();
+    drawWb();
+    toast('已保存');
   }
 };
 
 /* ---------- 长期记忆 ---------- */
 let MEM = [];
 async function loadMem() {
-  const rid = Chat.cur, version = Chat.openVersion;
-  const data = rid ? dec(await Store.get('mem:' + rid), []) : [];
-  if (rid === Chat.cur && version === Chat.openVersion && !Chat.switching) MEM = Array.isArray(data) ? data : [];
+  const rid = Roles.activeId;
+  MEM = rid ? (dec(await Store.get('mem:' + rid), []) || []) : [];
+  if (!Array.isArray(MEM)) MEM = [];
 }
-async function saveMem(rid = Chat.cur, entries = MEM) {
-  if (!Roles.byId(rid)) return;
-  await Store.set('mem:' + rid, enc(entries));
+async function saveMem() {
+  if (!Roles.activeId) return;
+  await Store.set('mem:' + Roles.activeId, enc(MEM));
 }
 function drawMem() {
   const box = $('#memList');
@@ -5550,6 +5467,7 @@ function drawMem() {
     return;
   }
   MEM.slice().reverse().forEach((m) => {
+    const realIdx = MEM.indexOf(m);
     const el = document.createElement('div');
     el.className = 'memitem';
     const mh = document.createElement('div');
@@ -5560,13 +5478,7 @@ function drawMem() {
       String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')));
     const del = document.createElement('button');
     del.textContent = '删除';
-    const rid = Chat.cur, entries = MEM;
-    del.onclick = async () => {
-      if (roleSwitchBlocked() || Chat.cur !== rid || MEM !== entries || entries.indexOf(m) < 0) return;
-      entries.splice(entries.indexOf(m), 1);
-      await saveMem(rid, entries);
-      if (Chat.cur === rid && MEM === entries) drawMem();
-    };
+    del.onclick = async () => { MEM.splice(realIdx, 1); await saveMem(); drawMem(); };
     mh.appendChild(del);
     el.appendChild(mh);
     el.appendChild(document.createTextNode(m.text || ''));
@@ -5649,7 +5561,6 @@ function bindSettings() {
     if (!el) return;
     el.addEventListener('change', async () => {
       const privateField = Object.prototype.hasOwnProperty.call(CHAT_DEFAULT, key);
-      if (privateField && (Chat.switching || Chat.saving)) return;
       (privateField ? RolePrefs : AI)[key] = isNum ? Number(el.value) : el.value;
       if (privateField) await Roles.save();
       else await saveAI();
@@ -5727,14 +5638,10 @@ function bindSettings() {
     e.target.value = '';
     if (!f) return;
     try {
-      const role = Roles.byId(Chat.cur), target = Me;
-      if (!role) return;
-      const current = beginImageJob(target, 'avatar');
-      const avatar = await fileToAvatar(f);
-      if (!current() || Roles.byId(role.id) !== role) return;
-      target.avatar = avatar;
+      Me.avatar = await fileToAvatar(f);
       await saveMe();
-      if (Me === target) { drawSettings(); drawMsgs(); }
+      drawSettings();
+      drawMsgs();
     } catch (err) { toast('头像处理失败'); }
   };
   const ma = $('#meAvatar');
@@ -5744,7 +5651,6 @@ function bindSettings() {
     const el = $(id);
     if (!el) return;
     el.addEventListener('change', async () => {
-      if (Chat.switching || Chat.saving) return;
       Me[key] = el.value;
       await saveMe();
       drawSettings();
@@ -5764,15 +5670,12 @@ function bindSettings() {
     e.target.value = '';
     if (!f) return;
     try {
-      const role = Roles.byId(avatarTargetRole);
-      avatarTargetRole = '';
-      if (!role) return;
-      const current = beginImageJob(role, 'avatar');
       const av = await fileToAvatar(f);
-      if (!current() || Roles.byId(role.id) !== role) return;
-      await Roles.update(role.id, { avatar: av });
-      drawRoleList(); drawChatList(); drawMsgs();
-      if (Chat.cur === role.id) $('#roomAvatar').src = av;
+      if (avatarTargetRole) {
+        await Roles.update(avatarTargetRole, { avatar: av });
+        avatarTargetRole = '';
+        drawRoleList(); drawChatList(); drawMsgs();
+      }
     } catch (err) { toast('头像处理失败'); }
   };
   const reAv = $('#roAvatarPv');
@@ -5783,12 +5686,8 @@ function bindSettings() {
     e.target.value = '';
     if (!f) return;
     try {
-      const session = RoleEditor.session;
-      const current = beginImageJob(RoleEditor, 'avatar');
-      const avatar = await fileToAvatar(f);
-      if (!current() || session !== RoleEditor.session || Chat.saving) return;
-      RoleEditor.pendingAvatar = avatar;
-      $('#roAvatarPv').src = avatar;
+      RoleEditor.pendingAvatar = await fileToAvatar(f);
+      $('#roAvatarPv').src = RoleEditor.pendingAvatar;
     } catch (err) { toast('头像处理失败'); }
   };
   const rs = $('#roleSave'); if (rs) rs.onclick = () => RoleEditor.confirm();
@@ -5800,16 +5699,15 @@ function bindSettings() {
   const ws = $('#wbSave'); if (ws) ws.onclick = () => WbEditor.confirm();
   const wc = $('#wbCancel'); if (wc) wc.onclick = () => closeDw();
   const fw = $('#foldWb');
-  if (fw) fw.addEventListener('toggle', async () => { if (fw.open) drawWb(); });
+  if (fw) fw.addEventListener('toggle', async () => { if (fw.open) { await loadWb(); drawWb(); } });
 
   /* 记忆 */
   const fm = $('#foldMem');
-  if (fm) fm.addEventListener('toggle', async () => { if (fm.open) drawMem(); });
+  if (fm) fm.addEventListener('toggle', async () => { if (fm.open) { await loadMem(); drawMem(); } });
   const bsn = $('#btnSummarizeNow');
   if (bsn) bsn.onclick = () => summarizeNow();
   const bcm = $('#btnClearMem');
   if (bcm) bcm.onclick = async () => {
-    if (roleSwitchBlocked()) return;
     if (!confirm('清空这位角色的全部长期记忆？')) return;
     MEM = [];
     await saveMem();
@@ -5839,22 +5737,16 @@ function bindSettings() {
     if (!f) return;
     const t = toast('正在处理背景图…', { loading: true });
     try {
-      const role = Roles.byId(Chat.cur), target = Look;
-      if (!role) return;
-      const current = beginImageJob(target, 'bg');
-      const bg = await fileToBg(f);
-      if (!current() || Roles.byId(role.id) !== role) return;
-      target.bg = bg;
+      Look.bg = await fileToBg(f);
       await saveLookCfg();
-      if (Look === target) { drawSettings(); applyChatLook(); }
+      t.close();
+      drawSettings();
+      applyChatLook();
       toast('背景换好了');
-    } catch (err) { console.warn(err); toast('这张图处理不了，换一张试试'); }
-    finally { t.close(); }
+    } catch (err) { t.close(); console.warn(err); toast('这张图处理不了，换一张试试'); }
   };
   const bcb = $('#btnClearBg');
   if (bcb) bcb.onclick = async () => {
-    if (Chat.switching || Chat.saving) return;
-    beginImageJob(Look, 'bg');
     Look.bg = '';
     await saveLookCfg();
     drawSettings();
@@ -5866,7 +5758,6 @@ function bindSettings() {
     const el = $(id);
     if (!el) return;
     const apply = async () => {
-      if (Chat.switching || Chat.saving) return;
       Look[key] = isNum ? Number(el.value) : el.value;
       await saveLookCfg();
       applyChatLook();
@@ -5876,7 +5767,6 @@ function bindSettings() {
     el.addEventListener('change', apply);
     /* 滑块拖动时实时预览 */
     if (el.type === 'range') el.addEventListener('input', () => {
-      if (Chat.switching || Chat.saving) return;
       Look[key] = isNum ? Number(el.value) : el.value;
       applyChatLook();
       if (live) live(el.value);
@@ -5890,8 +5780,6 @@ function bindSettings() {
 
   const brl = $('#btnResetLook');
   if (brl) brl.onclick = async () => {
-    if (Chat.switching || Chat.saving) return;
-    beginImageJob(Look, 'bg');
     Object.assign(Look, LOOK_DEFAULT);
     await saveLookCfg();
     drawSettings();
@@ -5903,7 +5791,6 @@ function bindSettings() {
   /* ---------- 危险操作 ---------- */
   const bcc = $('#btnClearChats');
   if (bcc) bcc.onclick = async () => {
-    if (roleSwitchBlocked()) return;
     if (!confirm('清空「所有角色」的聊天记录？\n\n'
       + '角色本身、人设、长期记忆、世界书、衣橱都不会动，只删对话。\n'
       + '删了找不回来。')) return;
@@ -6052,8 +5939,10 @@ async function openRoom(roleId) {
   Chat.switching = true;
   try {
     chatView = 'room';
+    Roles.activeId = r.id;
+    S.charId = r.id;
+    S.charName = r.name;
     await Chat.open(r.id);
-    Chat.switching = true;
     await Roles.save();
     await saveCfg();
     $('#chatList').classList.add('hide');
@@ -6366,7 +6255,7 @@ function updateReplyBadge() {
 }
 
 async function sendChat() {
-  if (Chat.busy || Chat.switching || Chat.saving) return;
+  if (Chat.busy) return;
   const role = Roles.byId(Chat.cur);
   if (!role) return toast('先去「设置 → 角色」建一位');
 
@@ -6386,7 +6275,7 @@ async function sendChat() {
 
 /* ---------- 让他回复 ---------- */
 async function replyChat() {
-  if (Chat.busy || Chat.switching || Chat.saving) return;
+  if (Chat.busy) return;
   const role = Roles.byId(Chat.cur);
   if (!role) return toast('先去「设置 → 角色」建一位');
   if (!apiReady()) {
@@ -6407,7 +6296,6 @@ async function replyChat() {
     scrollMsgsToEnd();
   }
 
-  if (Chat.cur !== role.id || Chat.switching || Chat.saving) return;
   if (!Chat.msgs.filter(m => m.role === 'user').length) {
     return toast('先说点什么，再让他回');
   }
@@ -6416,7 +6304,7 @@ async function replyChat() {
 
 async function runAiReply() {
   const role = Roles.byId(Chat.cur);
-  if (!role || Chat.busy || Chat.switching || Chat.saving) return;
+  if (!role || Chat.busy) return;
   Chat.busy = true;
   const sendBtn = $('#chatSend');
   const replyBtn = $('#chatReply');
@@ -6468,16 +6356,9 @@ async function runAiReply() {
 }
 
 /* ---------- 记忆总结 ---------- */
-function normalizeMessages(messages, memories = []) {
-  const legacyEnd = memories.length ? Number(memories[memories.length - 1].to || 0) : 0;
-  messages.forEach((m, i) => {
-    if (!m.id) m.id = uid('msg_');
-    if (typeof m.summarized !== 'boolean') m.summarized = i < legacyEnd;
-  });
-}
 function unsummarizedCount() {
-  normalizeMessages(Chat.msgs, MEM);
-  return Chat.msgs.filter(m => !m.summarized && m.role === 'user').length;
+  const last = MEM.length ? (MEM[MEM.length - 1].to || 0) : 0;
+  return Chat.msgs.filter((m, i) => i >= last && m.role === 'user').length;
 }
 function maybeAutoSummarize() {
   const every = Number(RolePrefs.memAuto == null ? 20 : RolePrefs.memAuto);
@@ -6487,14 +6368,12 @@ function maybeAutoSummarize() {
 
 async function summarizeNow(silent) {
   const role = Roles.byId(Chat.cur);
-  if (!role || Chat.summarizing || Chat.switching || Chat.saving || (Chat.busy && !silent)) return;
+  if (!role) return;
   if (!apiReady()) { if (!silent) toast('先配 AI 接口'); return; }
-  normalizeMessages(Chat.msgs, MEM);
-  const seg = Chat.msgs.filter(m => !m.summarized && (m.role === 'user' || m.role === 'ai')).map(m => Object.assign({}, m));
+  const last = MEM.length ? (MEM[MEM.length - 1].to || 0) : 0;
+  const seg = Chat.msgs.slice(last).filter(m => m.role === 'user' || m.role === 'ai');
   if (seg.length < 4) { if (!silent) toast('聊得还太少，没什么可总结的'); return; }
-  const rid = role.id, memories = MEM, ids = new Set(seg.map(m => m.id));
-  const version = Chat.openVersion;
-  Chat.summarizing = true;
+
   const t = silent ? null : toast('正在总结…', { loading: true });
   try {
     const convo = seg.map(m =>
@@ -6510,13 +6389,10 @@ async function summarizeNow(silent) {
     ], { stream: false, temp: 0.4 });
 
     const clean = String(txt || '').trim();
-    if (Roles.byId(rid) !== role || Chat.cur !== rid || Chat.openVersion !== version || MEM !== memories) return;
     if (clean) {
-      memories.push({ text: clean, createdAt: Date.now(), messageIds: Array.from(ids) });
-      if (memories.length > 150) memories.splice(0, memories.length - 150);
-      await saveMem(rid, memories);
-      Chat.msgs.forEach(m => { if (ids.has(m.id)) m.summarized = true; });
-      await Chat.persist();
+      MEM.push({ text: clean, createdAt: Date.now(), from: last, to: Chat.msgs.length });
+      if (MEM.length > 150) MEM = MEM.slice(-150);
+      await saveMem();
       drawMem();
       if (t) t.close();
       if (!silent) toast('记下来了');
@@ -6529,9 +6405,6 @@ async function summarizeNow(silent) {
     if (t) t.close();
     console.warn('总结失败', e);
     if (!silent) toast('总结失败：' + humanErr(e));
-  } finally {
-    Chat.summarizing = false;
-    if (t) t.close();
   }
 }
 
@@ -6551,7 +6424,6 @@ function bindChat() {
 
   const rc = $('#roomClear');
   if (rc) rc.onclick = async () => {
-    if (roleSwitchBlocked()) return;
     const r = Roles.byId(Chat.cur);
     if (!r) return;
     if (!confirm('清空跟「' + (r.name || '他') + '」的聊天记录？\n（长期记忆和世界书不会动）')) return;
@@ -6823,11 +6695,10 @@ async function boot() {
         greeting: '衣柜我都看过了。今天想穿成什么样？'
       });
     }
-    if (!Roles.byId(Roles.activeId) && Roles.list.length) Roles.activeId = Roles.list[0].id;
+    if (!Roles.activeId && Roles.list.length) Roles.activeId = Roles.list[0].id;
     /* 试衣间的角色选择跟聊天保持同一个人 */
+    if (!S.charId && Roles.activeId) S.charId = Roles.activeId;
     await Chat.open(Roles.activeId);
-    await Roles.save();
-    await saveCfg();
   } catch (e) {
     console.error('读取存档失败', e);
     toast('读取存档失败，这次以空衣橱启动（已有数据没有被删）', { duration: 5000 });
