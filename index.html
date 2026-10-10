@@ -219,6 +219,15 @@
   .verdict{white-space:pre-wrap;font-size:13px;line-height:1.85;color:#ececf0;
     background:#1c1a1f;border:1px solid rgba(255,117,151,.2);
     border-radius:14px;padding:13px;margin-top:10px;min-height:56px;user-select:text}
+  /* 点评拆成聊天气泡 */
+  .verdict.vd{white-space:normal;background:#151318}
+  .vd-plan{font-size:12.5px;line-height:1.75;color:#f2eef0;padding:9px 11px;border-radius:11px;
+    background:rgba(255,117,151,.08);border:1px solid rgba(255,117,151,.22);margin-bottom:10px;white-space:pre-wrap}
+  .vd-plan b{display:block;font-size:10.5px;color:var(--pink);font-weight:600;margin-bottom:2px;letter-spacing:.3px}
+  .vd-msgs{display:flex;flex-direction:column;gap:11px}
+  .vd-msgs .msg{animation-fill-mode:backwards}
+  .vd-msgs .msg .bub{max-width:calc(100% - 44px)}
+  .vd-en{margin-top:10px;font-size:10.5px;line-height:1.6;color:var(--text-dim);word-break:break-word}
   .thumbline{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
   .thumbline img{width:52px;height:66px;object-fit:cover;border-radius:8px;
     border:1px solid rgba(255,255,255,.12);background:#15151a}
@@ -250,6 +259,51 @@
   .vision-opt input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .vision-opt input:focus{border-color:rgba(255,117,151,.6)}
   .vision-tip{flex:1;min-width:0;font-size:10.5px;line-height:1.5}
+
+  /* ---------- 天气与时间（设置页） ---------- */
+  .f label.wx-switch{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#eee;cursor:pointer;margin:0}
+  .wx-switch input{width:17px;height:17px;accent-color:#ff7597;margin:0;flex:0 0 auto}
+  .wx-info{font-size:11.5px;line-height:1.7;color:var(--text-sub);white-space:pre-wrap}
+  .wx-info.ok{color:#e9dfe3}
+  .wx-info.bad{color:#ff9b9b}
+
+  /* ---------- 角色陪伴：小头像 + 台词气泡 ---------- */
+  .buddy{position:absolute;left:14px;bottom:150px;z-index:26;display:none;flex-direction:column;
+    align-items:flex-start;gap:6px;pointer-events:none;max-width:calc(100% - 100px)}
+  .buddy.on{display:flex}
+  .buddy-av{width:44px;height:44px;border-radius:50%;object-fit:cover;pointer-events:auto;cursor:pointer;
+    border:1.5px solid rgba(255,117,151,.7);background:#2a2a30;box-shadow:0 4px 16px rgba(0,0,0,.5);
+    opacity:.78;transition:opacity .2s,transform .2s}
+  .buddy.talk .buddy-av{opacity:1;transform:scale(1.04)}
+  .buddy-av:active{transform:scale(.94)}
+  /* 气泡区：同一段话拆成几条，像聊天一样一条条往下叠 */
+  .buddy-bub{position:relative;pointer-events:auto;cursor:pointer;max-width:270px;
+    opacity:0;transform:translateY(6px) scale(.97);transform-origin:left bottom;
+    transition:opacity .22s,transform .22s;visibility:hidden}
+  .buddy.talk .buddy-bub{opacity:1;transform:none;visibility:visible}
+  .buddy-nm{font-size:10px;color:var(--pink);margin:0 0 3px 4px;letter-spacing:.3px;
+    text-shadow:0 1px 4px rgba(0,0,0,.8)}
+  .buddy-txt{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+  .buddy-line{position:relative;max-width:100%;padding:8px 12px 9px;border-radius:15px;background:#1d1a20;
+    border:1px solid rgba(255,117,151,.45);box-shadow:0 6px 20px rgba(0,0,0,.5);
+    font-size:13px;line-height:1.6;color:#f2eef0;white-space:pre-wrap;word-break:break-word;
+    animation:bline .22s ease}
+  .buddy-line:last-child{border-bottom-left-radius:5px}
+  .buddy-line.old{opacity:.72}
+  @keyframes bline{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .buddy-line i.act{color:#a8a3a8;font-style:italic}
+  .buddy-line .typing{padding:3px 0}
+  /* 抽屉里的同款台词（抽屉会盖住悬浮气泡） */
+  .buddy-inline{display:flex;align-items:flex-start;gap:8px;margin-top:8px;padding:8px 10px;border-radius:12px;
+    background:#1d1a20;border:1px solid rgba(255,117,151,.35)}
+  .buddy-inline img{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:0 0 auto;
+    border:1px solid rgba(255,117,151,.6)}
+  .buddy-inline span{font-size:12.5px;line-height:1.6;color:#f2eef0;word-break:break-word}
+  .buddy-inline b{display:block;font-size:10px;font-weight:500;color:var(--pink);margin-bottom:1px}
+  .buddy-inline i.act{color:#a8a3a8;font-style:italic}
+  .buddy-inline em{display:block;width:fit-content;max-width:100%;font-style:normal;margin-top:4px;padding:5px 10px;
+    border-radius:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,117,151,.25)}
+  .buddy-inline b + em{margin-top:2px}
 
   /* ---------- 悬浮气泡 ---------- */
   .fabs{position:absolute;right:20px;bottom:96px;z-index:20;display:flex;flex-direction:column;gap:10px}
@@ -510,13 +564,17 @@
   .msg{display:flex;gap:9px;align-items:flex-start;max-width:100%;animation:min .22s ease}
   @keyframes min{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
   .msg.me{flex-direction:row-reverse}
+  /* 同一个人连着发的几条：贴紧一点，只有第一条带头像和名字 */
+  .msg.cont{margin-top:-6px}
+  .msg.cont .av{visibility:hidden;height:1px;min-height:1px}
+  .msg.still{animation:none}
   .msg .av{width:34px;height:34px;min-width:34px;min-height:34px;flex:0 0 auto;
     border-radius:50%;object-fit:cover;object-position:center;aspect-ratio:1/1;
     background:#2a2a30;border:1px solid rgba(255,255,255,.1);cursor:pointer;display:block}
   .msg .bub{position:relative;max-width:calc(100% - 56px);padding:10px 13px;border-radius:15px;
     font-size:inherit;line-height:1.72;word-break:break-word;white-space:pre-wrap;
     background:var(--panel);border:1px solid rgba(255,255,255,.07);color:#ececf0}
-  .msg.me .bub{background:rgba(255,117,151,.15);border-color:rgba(255,117,151,.32);color:#fff}
+  .msg.me .bub{background:#ff7597;border-color:rgba(255,255,255,.12);color:#fff}
   .msg .bub .nm{font-size:10.5px;color:var(--text-dim);margin-bottom:4px;letter-spacing:.3px}
   /* 沉浸式动作描写：*抬眼* 渲染成灰色斜体 */
   .msg .bub i.act{color:#9a9aa2;font-style:italic;opacity:.92}
@@ -858,7 +916,7 @@
       <div class="page" id="pgFitting">
 
         <!-- 选衣服（两种模式共用） -->
-        <div class="panel">
+        <div class="panel" id="panelPick">
           <h3>选好要搭的衣服 <span class="badge" id="pickCount">0 件</span> <span class="badge">上限 20</span></h3>
           <div class="thumbline" id="pickThumbs"></div>
           <div class="row" style="margin-top:10px">
@@ -919,7 +977,24 @@
         </div>
 
         <div class="panel" id="panelCharMode" style="display:none">
-          <h3>② 搭配方式</h3>
+          <h3>② 从哪里挑</h3>
+          <div class="mode-block">
+            <label class="mode-row" id="scopeRowAll">
+              <input type="radio" name="fitScope" value="all" id="scopeAll" checked>
+              <span class="mode-txt">
+                <b>整个衣柜随他挑</b>
+                <i>不用你先选，他直接在衣柜所有衣服里帮你配一整套</i>
+              </span>
+            </label>
+            <label class="mode-row" id="scopeRowPicked">
+              <input type="radio" name="fitScope" value="picked" id="scopePicked">
+              <span class="mode-txt">
+                <b>只在我选的几件里挑</b>
+                <i>先在上面选好几件，他只从这几件里搭</i>
+              </span>
+            </label>
+          </div>
+          <h3 style="margin-top:16px">③ 搭配方式</h3>
           <div class="mode-block">
             <label class="mode-row" id="modeRowText">
               <input type="radio" name="fitMode" value="text" id="modeText" checked>
@@ -945,10 +1020,19 @@
           </div>
         </div>
 
+        <div class="panel" id="panelCharReq" style="display:none">
+          <h3>④ 你的要求 <span class="badge">可不填</span></h3>
+          <div class="f" style="margin-top:8px">
+            <textarea id="askReq" placeholder="比如：今天要去约会 / 想走甜酷风 / 要能走很多路 / 别穿裙子…&#10;什么都不写，就让他按自己的想法来"></textarea>
+          </div>
+          <div class="wx-info" id="fitEnvLine" style="margin-top:4px"></div>
+        </div>
+
         <div class="panel" id="panelCharAsk" style="display:none">
-          <h3>③ 请他开口</h3>
+          <h3>⑤ 请他开口</h3>
           <button class="btn pri" id="btnAsk">让他点评并搭配</button>
           <div class="verdict" id="verdict">还没有点评。选好角色和衣服，点上面那颗按钮。</div>
+          <div class="thumbline" id="verdictThumbs"></div>
           <div class="genbox" id="genBox"></div>
           <div class="row" style="margin-top:10px">
             <button class="btn gh sm" id="btnSendChat">发到私聊</button>
@@ -1060,16 +1144,28 @@
                 <button class="btn pri sm" id="btnTestApi">测试连接</button>
               </div>
               <div class="hint" id="apiTestOut" style="margin:8px 0 0;display:none"></div>
-              <div class="f" style="margin-top:12px">
-                <label>回复方式</label>
+              <div class="hint" style="margin:10px 0 0">
+                Key 只存在你手机本地，不会发给任何第三方，只在调用你自己配的接口时用。
+              </div>
+            </div>
+          </details>
+
+          <details class="fold" id="foldStream">
+            <summary>回复方式 <span class="badge" id="streamState" style="margin-left:auto">自动</span></summary>
+            <div class="inner">
+              <div class="f">
+                <label>流式 / 非流式</label>
                 <select id="apiStreamMode">
                   <option value="auto">自动（推荐：先试流式，不行自动转非流式）</option>
                   <option value="stream">强制流式</option>
                   <option value="once">强制非流式</option>
                 </select>
               </div>
+              <div class="hint" id="streamHint" style="margin:0"></div>
               <div class="hint" style="margin:6px 0 0">
-                Key 只存在你手机本地，不会发给任何第三方，只在调用你自己配的接口时用。
+                流式：他边想边说，写完一条就冒出一个气泡。<br>
+                非流式：整段生成完再一条条冒出来，等的时间稍长，但兼容性最好。<br>
+                有些中转站不支持流式、或者流式会断，选「强制非流式」就稳了。
               </div>
             </div>
           </details>
@@ -1097,6 +1193,57 @@
               <div class="hint" style="margin:0">
                 走标准 OpenAI 多模态格式，图片以 base64 直接发给你配的接口。
                 只要模型支持看图（gpt-4o / gemini / claude 等），识图就能用。
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="setgrp">
+          <h4>天气与时间</h4>
+          <details class="fold" id="foldWeather">
+            <summary>让角色知道此刻的天气和时间 <span class="badge" id="wxState" style="margin-left:auto">未获取</span></summary>
+            <div class="inner">
+              <div class="f">
+                <label class="wx-switch"><input type="checkbox" id="wxOn" checked><span>角色可以读取天气</span></label>
+                <div class="hint" style="margin:4px 0 0">
+                  日期、星期、几点、季节始终会告诉角色；打开这个开关再加上当地天气和气温。
+                  聊天、帮你挑衣服、点评、识图时都会用到，他会在合适的时候自然地带进话里。
+                </div>
+              </div>
+              <div class="f">
+                <label class="wx-switch"><input type="checkbox" id="wxGeo" checked><span>用手机定位确定城市</span></label>
+                <div class="hint" style="margin:4px 0 0">
+                  定位需要 https 页面并允许位置权限。用不了就关掉，在下面手填城市。
+                </div>
+              </div>
+              <div class="f">
+                <label>城市 <i>（建议填英文，如 Shanghai / Hangzhou / Tokyo；定位失败时也会用它兜底）</i></label>
+                <input id="wxCity" type="text" placeholder="Shanghai" autocomplete="off" autocapitalize="words">
+              </div>
+              <button class="btn pri sm" id="btnWxTest" type="button">测试获取</button>
+              <div class="wx-info" id="wxInfo" style="margin-top:8px">还没获取天气</div>
+            </div>
+          </details>
+        </div>
+
+        <div class="setgrp">
+          <h4>角色陪伴</h4>
+          <details class="fold" id="foldBuddy">
+            <summary>他在旁边说话 <span class="badge" id="buddyState" style="margin-left:auto">开</span></summary>
+            <div class="inner">
+              <div class="f">
+                <label class="wx-switch"><input type="checkbox" id="buddyOn" checked><span>在衣橱 / 试衣间显示他的小头像和台词</span></label>
+                <div class="hint" style="margin:4px 0 0">
+                  识图、帮你挑衣服、点评时，他的台词跟着同一次接口一起生成，不额外多花调用。
+                  没调接口的小动作（手动入柜、存搭配、随机抽）用的是本地预设的短句。
+                  点小头像可以重看他刚才说的话，点气泡收起。
+                </div>
+              </div>
+              <div class="f">
+                <label>谁陪着你</label>
+                <select id="buddyWho">
+                  <option value="active">当前聊天 / 试衣间选中的那位</option>
+                </select>
               </div>
             </div>
           </details>
@@ -1135,6 +1282,12 @@
               <div class="f">
                 <label>我的气泡颜色</label>
                 <input id="meBubble" type="color" value="#ff7597" style="height:42px;padding:4px">
+              </div>
+              <div class="f">
+                <label>我的气泡不透明度 <i>（100% 为纯色，背景花时建议调高）</i></label>
+                <input type="range" id="meBubbleAlpha" min="10" max="100" step="5" value="100"
+                  style="width:100%;accent-color:var(--pink)">
+                <div class="hint" style="margin:3px 0 0" id="meBubbleAlphaVal">100%</div>
               </div>
             </div>
           </details>
@@ -1210,14 +1363,29 @@
         <div class="setgrp">
           <h4>聊天风格</h4>
           <details class="fold" id="foldStyle">
-            <summary>沉浸式 / 纯对话</summary>
+            <summary>描写 / 每次说几句 / 温度 <span class="badge" id="styleState" style="margin-left:auto">沉浸式</span></summary>
             <div class="inner">
               <div class="f">
-                <label>回复风格</label>
-                <select id="rpMode">
-                  <option value="immersive" selected>沉浸式（带 *动作* 和神态描写）</option>
-                  <option value="plain">纯对话（只说话，不描写动作）</option>
-                </select>
+                <label class="wx-switch"><input type="checkbox" id="rpActs" checked><span>允许他写动作、神态和心理描写</span></label>
+                <div class="hint" style="margin:4px 0 0">
+                  勾上：可以穿插 *抬眼看你* 这样的描写。<br>
+                  不勾：他只能像发消息一样说话，不写动作、神态、心理、场景和旁白；
+                  万一还是写了，星号和括号里的描写也会被自动删掉。
+                  聊天、试衣间点评、陪伴台词都按这个来。
+                </div>
+              </div>
+              <div class="f">
+                <label>他一次最少说几句、最多说几句 <i>（一句 = 一个气泡）</i></label>
+                <div class="row" style="align-items:center;gap:8px">
+                  <span class="hint" style="margin:0">最少</span>
+                  <select id="bubMin" style="flex:1"></select>
+                  <span class="hint" style="margin:0">最多</span>
+                  <select id="bubMax" style="flex:1"></select>
+                </div>
+                <div class="hint" style="margin:4px 0 0">
+                  在这个范围里由他自己决定这次发几句：话少就一两句，想说的多就多发几条。
+                  气泡按他分的句来拆，不按字数硬切。
+                </div>
               </div>
               <div class="f">
                 <label>回复温度 <i>（越高越放得开，越低越稳）</i></label>
@@ -1323,6 +1491,15 @@
   <div class="fabs" id="fabs">
     <button class="fab alt" id="fabChar" aria-label="角色点单">♡</button>
     <button class="fab main" id="fabAdd" aria-label="收纳新衣物">＋</button>
+  </div>
+
+  <!-- 角色陪伴：小头像 + 台词气泡 -->
+  <div class="buddy" id="buddy" aria-live="polite">
+    <div class="buddy-bub" id="buddyBub">
+      <div class="buddy-nm" id="buddyName"></div>
+      <div class="buddy-txt" id="buddyTxt"></div>
+    </div>
+    <img class="buddy-av" id="buddyAv" alt="" src="">
   </div>
 
   <div class="selbar">
@@ -2060,9 +2237,10 @@ const Bridge = {
     /* 调用方给的 system 放前面，角色人设追加进去 */
     if (roleId) {
       const r = Roles.byId(roleId);
-      if (r && r.prompt) {
+      if (r) {
         const i = msgs.findIndex(m => m.role === 'system');
-        const add = '\n\n【你的身份】\n' + applyVars(r.prompt, r);
+        const add = (r.prompt ? '\n\n【你的身份】\n' + applyVars(r.prompt, r) : '')
+          + '\n\n【说话方式】\n' + actsRule(r);
         if (i >= 0) msgs[i] = { role: 'system', content: String(msgs[i].content || '') + add };
         else msgs.unshift({ role: 'system', content: add.trim() });
       }
@@ -2226,16 +2404,66 @@ let Me = {
   name: '',
   persona: '',
   avatar: '',
-  bubble: '#ff7597'
+  bubble: '#ff7597',
+  bubbleAlpha: 100
 };
 async function loadMe() {
   const raw = dec(await Store.get('me'), null);
   if (raw && typeof raw === 'object') Me = Object.assign(Me, raw);
   if (!Me.avatar) Me.avatar = defaultAvatar(Me.name || '我', '#4a2b38');
 }
-const ME_DEFAULT = { name:'', persona:'', avatar:'', bubble:'#ff7597' };
-const CHAT_DEFAULT = { temp:0.95, rpMode:'immersive', wardrobeShare:'all', memRounds:40, memAuto:20 };
+const ME_DEFAULT = { name:'', persona:'', avatar:'', bubble:'#ff7597', bubbleAlpha:100 };
+const CHAT_DEFAULT = { temp:0.95, rpMode:'immersive', wardrobeShare:'all', memRounds:40, memAuto:20, bubMin:1, bubMax:4 };
 let RolePrefs = Object.assign({}, CHAT_DEFAULT);
+const BUB_LIMIT = 10;
+
+/* 某位角色的聊天偏好（试衣间 / 陪伴用的不一定是当前聊天的那位，所以按角色取） */
+function prefsOf(role) {
+  const c = role && role.settings && role.settings.chat;
+  return c || RolePrefs || CHAT_DEFAULT;
+}
+function allowActs(role) { return (prefsOf(role).rpMode || 'immersive') === 'immersive'; }
+/* 一次说几句：[最少, 最多]，非法值自动纠正 */
+function bubRange(role) {
+  const p = prefsOf(role);
+  let lo = Math.round(Number(p.bubMin)), hi = Math.round(Number(p.bubMax));
+  if (!isFinite(lo) || lo < 1) lo = CHAT_DEFAULT.bubMin;
+  if (!isFinite(hi) || hi < 1) hi = CHAT_DEFAULT.bubMax;
+  lo = Math.min(lo, BUB_LIMIT); hi = Math.min(hi, BUB_LIMIT);
+  if (lo > hi) hi = lo;
+  return [lo, hi];
+}
+function bubRangeText(role) {
+  const r = bubRange(role);
+  return r[0] === r[1] ? r[0] + ' 条' : r[0] + '~' + r[1] + ' 条';
+}
+/* 发消息格式规则：给模型看的 */
+function msgFormatRule(role, what) {
+  const r = bubRange(role);
+  return (what || '这次回复') + '像用手机发消息一样分条发，'
+    + (r[0] === r[1] ? '正好发 ' + r[0] + ' 条' : '发 ' + r[0] + '~' + r[1] + ' 条，具体几条由你根据想说的内容决定，不要每次都一样多')
+    + '。一条就是一个聊天气泡，每条单独占一行，条与条之间只用换行分开；一条消息内部不要换行，'
+    + '也不要加序号、引号或「第一条」这类标记。';
+}
+/* 描写规则：给模型看的 */
+function actsRule(role) {
+  return allowActs(role)
+    ? '可以用 *动作* 的形式穿插神态和动作描写，但别写成小说，一条消息里最多一处，重点还是说话；*动作* 和它所属的话写在同一条里。'
+    : '只输出说出口的话，就像真人发消息。绝对不要写任何动作、神态、表情、心理活动、场景或旁白，不要用星号 * 或括号（）来写描写。';
+}
+/* 不允许描写时的兜底：把星号 / 括号里的描写删掉 */
+function stripActs(text, role) {
+  if (allowActs(role)) return String(text || '');
+  return String(text || '')
+    .replace(/\*[^*\n]*\*/g, '')
+    /* 括号里带数字的多半是「（体感 24°C）」这种正经信息，留着 */
+    .replace(/[（(]([^（）()\n]{0,60})[）)]/g, (m, inner) => (/\d/.test(inner) ? m : ''))
+    .replace(/^\s*(?:旁白|心理|内心|动作)[:：].*$/gm, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/^[ \t]+|[ \t]+$/gm, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
 
 function newRoleSettings(legacy) {
   const chat = Object.assign({}, CHAT_DEFAULT);
@@ -2320,8 +2548,10 @@ async function saveSettingsPage(privatePage) {
       Me.name = $('#meNameInput').value.trim();
       Me.persona = $('#mePersona').value;
       Me.bubble = $('#meBubble').value;
+      Me.bubbleAlpha = Number($('#meBubbleAlpha').value);
       RolePrefs.temp = Number($('#rpTemp').value);
-      RolePrefs.rpMode = $('#rpMode').value;
+      RolePrefs.rpMode = $('#rpActs').checked ? 'immersive' : 'plain';
+      readBubRange();
       RolePrefs.wardrobeShare = $('#wardrobeShare').value;
       RolePrefs.memRounds = Number($('#memRounds').value);
       RolePrefs.memAuto = Number($('#memAuto').value);
@@ -2996,7 +3226,7 @@ function drawPvs() {
  * 全都是「预填」——用户可以改，保存前什么都没落盘。
  */
 /* 拼一份给 AI 的识图提示词（单张衣物 → 结构化 JSON） */
-function buildTagPrompt() {
+function buildTagPrompt(who) {
   const groups = tagGroups();
   let existing = groups.map(g => {
     const all = g.preset.concat(g.custom);
@@ -3013,8 +3243,14 @@ function buildTagPrompt() {
     + '    "维度名": ["标签1", "标签2"]\n'
     + '  },\n'
     + '  "note": "一句话描述这件衣服的特点（可空）",\n'
-    + '  "promptEn": "英文生图关键词，逗号分隔"\n'
+    + '  "promptEn": "英文生图关键词，逗号分隔"'
+    + (who ? ',\n  "say": "台词（见下方说明）"\n' : '\n')
     + '}\n\n'
+    + (who
+        ? '关于 say：' + buddyPersona(who) + '她刚把这件衣服收进衣柜，你看了一眼，'
+          + '用你自己的口吻随口说一句（25 字以内，自然口语，可以夸、吐槽、联想到怎么搭，'
+          + '也可以结合此刻的季节天气说它现在穿不穿得上）。此刻：' + Weather.promptText().replace(/\n/g, ' ') + '\n\n'
+        : '')
     + '不要输出或创建品牌、渠道字段及标签。请判断季节和厚薄程度，不能确认时留空。\n'
     + '现有的维度和标签如下，请优先从已有标签里选，如果确实没有合适的才新建：\n'
     + existing + '\n\n'
@@ -3045,11 +3281,25 @@ async function recognizeImage(rawDataUrl, quality, onWait) {
     return { data: mock[Math.floor(Math.random() * mock.length)], route: 'mock' };
   }
 
-  const r = await visionSafe(buildTagPrompt(), rawDataUrl, quality, null, onWait);
+  /* 开着陪伴时顺带要一句台词（JSON 里多一个 say 字段，同一次调用） */
+  const who = Buddy.enabled() ? Buddy.role() : null;
+  const r = await visionSafe(buildTagPrompt(who), rawDataUrl, quality, null, onWait);
   let data;
   try { data = parseTagJson(r.text || ''); }
   catch (e) { throw new Error('AI 返回格式不对，请手动填写或再试一次'); }
-  return { data: data, route: r.route };
+  const say = who && data && typeof data.say === 'string' ? Buddy.clean(data.say) : '';
+  if (data) delete data.say;
+  return { data: data, route: r.route, say: say, who: who };
+}
+
+/* 抽屉开着时陪伴气泡被盖住，台词同时显示在抽屉里的状态区 */
+function buddyInlineHtml(say, who) {
+  if (!say) return '';
+  const r = who || Buddy.role();
+  const av = (r && r.avatar) || defaultAvatar(r ? r.name : '他', '#3a2f38');
+  const lines = Buddy.pieces(say).map(p => '<em>' + Buddy.html(p) + '</em>').join('');
+  return '<div class="buddy-inline"><img src="' + av.replace(/"/g, '&quot;') + '" alt="">'
+    + '<span><b>' + escHtml((r && r.name) || '他') + '</b>' + lines + '</span></div>';
 }
 
 /* 把识图结果里的标签并进标签池，返回 { tags, added, selected } */
@@ -3099,7 +3349,7 @@ async function autoTag() {
         : '⏳ 为了不撞平台的每分钟上限，正在排队（约 ' + sec + ' 秒）…';
     };
 
-    const { data } = await recognizeImage(S.pending[0].full || S.pending[0].thumb, quality, onWait);
+    const { data, say, who } = await recognizeImage(S.pending[0].full || S.pending[0].thumb, quality, onWait);
     statusEl.textContent = busy;
 
     if (data.category && S.cats.indexOf(data.category) >= 0) $('#fCat').value = data.category;
@@ -3118,7 +3368,9 @@ async function autoTag() {
     if (r.selected) parts.push('选中 ' + r.selected + ' 个标签');
     if (r.added) parts.push('新建 ' + r.added + ' 个');
     if (data.name) parts.push('名字→' + data.name);
-    statusEl.textContent = '✅ ' + (parts.length ? parts.join('，') : '识别完成') + '。可以修改后再保存。';
+    statusEl.innerHTML = escHtml('✅ ' + (parts.length ? parts.join('，') : '识别完成') + '。可以修改后再保存。')
+      + buddyInlineHtml(say, who);
+    if (say) Buddy.say(say, { now: true });
   } catch (e) {
     console.error('autoTag', e);
     const msg = (e && e.message) || String(e);
@@ -3167,14 +3419,16 @@ async function autoTagAll() {
    * 那种情况下后面每张都会同样失败，继续发只是白花钱。
    * 就算停了，停的也只是「识图」，剩下的照片照常无标签入柜，一张都不会丢。 */
   let stopReason = '';
+  /* 他对上一张说的话，跟着进度一起显示 */
+  let lastSay = '', lastWho = null;
 
   try {
     for (let i = 0; i < n; i++) {
       const im = S.pending[i];
       const head = '第 ' + (i + 1) + ' / ' + n + ' 张';
       if (!stopReason) {
-        statusEl.textContent = '正在识别 ' + head + '…'
-          + (failed ? '（已有 ' + failed + ' 张没认出来）' : '');
+        statusEl.innerHTML = escHtml('正在识别 ' + head + '…'
+          + (failed ? '（已有 ' + failed + ' 张没认出来）' : '')) + buddyInlineHtml(lastSay, lastWho);
       } else {
         statusEl.textContent = '识图已停止，正在把剩下的照片直接入柜（' + head + '）…';
       }
@@ -3184,6 +3438,7 @@ async function autoTagAll() {
         try {
           const r = await recognizeImage(im.full || im.thumb, quality);
           data = r.data;
+          if (r.say) { lastSay = r.say; lastWho = r.who; Buddy.say(r.say, { now: true }); }
         } catch (e) {
           console.warn('第 ' + (i + 1) + ' 张识图失败', e);
           failed++;
@@ -3240,6 +3495,9 @@ async function autoTagAll() {
     else if (stopReason) msg.push('识图中断（' + humanErr({ message: stopReason }) + '），剩下的已无标签入柜');
     else if (failed) msg.push(failed + ' 张没认出来，已无标签入柜，回头可以手动补或重新识');
     toast(msg.join('，'), { duration: (failed || stopReason) ? 6000 : 4000 });
+    /* 抽屉收起后让他把最后那句再说一遍；没台词就用本地短句 */
+    if (lastSay) Buddy.say(lastSay, { now: true });
+    else Buddy.event('saved');
     /* 配置类失败：直接把设置页推给用户，别让人干瞪眼 */
     if (stopReason === 'noApi' || stopReason === 'noKey' || stopReason === 'noModel' || stopReason === 'noVision') {
       go('set');
@@ -3803,6 +4061,7 @@ async function saveItem() {
       if (im) await Store.set('im:' + it.id, im.full);
     }
     toast('已收纳 ' + imgs.length + ' 件');
+    Buddy.event('saved');
   }
 
   /* 用户在抽屉里手打的标签已在提交时归好栏；这里兜底收录来源不明的（如导入的衣服） */
@@ -3820,7 +4079,8 @@ async function saveCfg() {
     pool: S.pool,
     charId: S.charId,
     fitMode: fitMode(),
-    visionCount: visionCount()
+    visionCount: visionCount(),
+    fitScope: fitScope()
   }));
 }
 
@@ -3981,6 +4241,7 @@ async function drawChars() {
         chatView = 'list';
         await drawChars();
         $('#roleState').textContent = name;
+        Buddy.refresh();
       } finally { Chat.switching = false; }
     };
     row.appendChild(el);
@@ -4059,20 +4320,838 @@ function syncModeUI() {
   $('#modeRowVision').classList.toggle('on', vision);
   $('#visionOpt').classList.toggle('on', vision);
 
-  const withImg = S.items.filter(i => S.picked.has(i.id) && !i.isDeleted && i.thumb).length;
+  const all = fitScope() === 'all';
+  const sa = $('#scopeRowAll'), sp = $('#scopeRowPicked');
+  if (sa) sa.classList.toggle('on', all);
+  if (sp) sp.classList.toggle('on', !all);
+  /* 「整个衣柜随他挑」时用不着先选衣服，把选衣服面板收起来免得误会 */
+  const isChar = $('#modeChar') && $('#modeChar').checked;
+  const pp = $('#panelPick');
+  if (pp) pp.style.display = (isChar && all) ? 'none' : 'block';
+  const ask = $('#btnAsk');
+  if (ask) ask.textContent = all ? '让他从衣柜里帮我挑一套' : '让他点评并搭配';
+
+  const withImg = all
+    ? live().filter(i => i.thumb).length
+    : S.items.filter(i => S.picked.has(i.id) && !i.isDeleted && i.thumb).length;
   const n = visionCount();
   const real = Math.min(n, withImg);
   $('#visionMinus').disabled = n <= VISION_MIN;
   $('#visionPlus').disabled = n >= VISION_MAX;
 
   const tip = $('#visionTip');
-  if (!withImg) {
+  if (all) {
+    if (!withImg) tip.textContent = '张 · 衣柜里还没有带照片的衣服，会自动只按文本搭';
+    else if (withImg <= n) tip.textContent = '张 · 衣柜共 ' + withImg + ' 件带照片，会全部看一遍再挑';
+    else tip.textContent = '张 · 先按标签从 ' + withImg + ' 件里粗筛 ' + n + ' 件候选，再逐张看图精选';
+  } else if (!withImg) {
     tip.textContent = '张 · 选中的衣服里还没有带照片的，会自动只按文本搭';
   } else if (n > withImg) {
     tip.textContent = '张 · 选中的只有 ' + withImg + ' 张带照片，实际看 ' + real + ' 张';
   } else {
     tip.textContent = '张 · 实际看 ' + real + ' 张，其余按文本信息搭';
   }
+}
+
+/* 角色搭配的挑选范围：整个衣柜 / 只在我选的几件里 */
+function fitScope() {
+  const p = $('#scopePicked');
+  return p && p.checked ? 'picked' : 'all';
+}
+
+/* ---------- 天气 / 时间 / 季节 ----------
+ * 全局设置（存 wx:cfg）：on 角色能不能读天气 / geo 用不用定位 / city 手填城市（建议英文）。
+ * 定位 → Open-Meteo（免费、无需 key、支持跨域）拿当前天气；定位失败自动用城市兜底。
+ * 日期、星期、几点、季节不依赖网络，始终会告诉角色。
+ * 结果缓存 30 分钟；过期后在调用 AI 前静默刷新，刷新失败就用旧数据，绝不挡正事。 */
+const Weather = {
+  cfg: { on: true, geo: true, city: '' },
+  data: null,
+  busy: false,
+  failAt: 0,
+  TTL: 30 * 60 * 1000,
+
+  desc(code) {
+    const c = Number(code);
+    if (code == null || !isFinite(c)) return '';
+    if (c === 0) return '晴';
+    if (c === 1) return '晴间少云';
+    if (c === 2) return '多云';
+    if (c === 3) return '阴';
+    if (c === 45 || c === 48) return '有雾';
+    if (c >= 51 && c <= 57) return '毛毛雨';
+    if (c >= 61 && c <= 67) return c >= 65 ? '大雨' : (c >= 63 ? '中雨' : '小雨');
+    if (c >= 71 && c <= 77) return '下雪';
+    if (c >= 80 && c <= 82) return '阵雨';
+    if (c === 85 || c === 86) return '阵雪';
+    if (c >= 95) return '雷雨';
+    return '';
+  },
+
+  /* 此刻的当地时间：有天气数据就按那座城市的时区算，否则用手机时间 */
+  now() {
+    const d = this.data;
+    if (d && typeof d.utcOffset === 'number' && this.cfg.on) {
+      const t = new Date(Date.now() + d.utcOffset * 1000);
+      return { y: t.getUTCFullYear(), mo: t.getUTCMonth() + 1, d: t.getUTCDate(), wd: t.getUTCDay(),
+        h: t.getUTCHours(), mi: t.getUTCMinutes(), tz: d.tzAbbr || d.tz || '', place: d.city || '' };
+    }
+    const t = new Date();
+    return { y: t.getFullYear(), mo: t.getMonth() + 1, d: t.getDate(), wd: t.getDay(),
+      h: t.getHours(), mi: t.getMinutes(), tz: '', place: '' };
+  },
+  dayPart(h) {
+    if (h < 5) return '深夜';
+    if (h < 8) return '清晨';
+    if (h < 11) return '上午';
+    if (h < 13) return '中午';
+    if (h < 17) return '下午';
+    if (h < 19) return '傍晚';
+    if (h < 23) return '晚上';
+    return '深夜';
+  },
+  /* 按月份 + 南北半球推季节 */
+  season() {
+    const n = this.now();
+    let m = n.mo;
+    const lat = this.data && this.cfg.on ? this.data.lat : null;
+    if (lat != null && lat < 0) m = ((m + 5) % 12) + 1;
+    if (m >= 3 && m <= 5) return '春季';
+    if (m >= 6 && m <= 8) return '夏季';
+    if (m >= 9 && m <= 11) return '秋季';
+    return '冬季';
+  },
+  timeText() {
+    const n = this.now();
+    return n.y + '年' + n.mo + '月' + n.d + '日 周' + '日一二三四五六'.charAt(n.wd) + ' '
+      + this.dayPart(n.h) + ' ' + String(n.h).padStart(2, '0') + ':' + String(n.mi).padStart(2, '0');
+  },
+
+  cfgKey() { return (this.cfg.geo ? 'geo' : '') + '|' + (this.cfg.city || '').trim().toLowerCase(); },
+  fresh() {
+    return !!(this.data && this.data.ts && Date.now() - this.data.ts < this.TTL && this.data.key === this.cfgKey());
+  },
+
+  async load() {
+    try {
+      const c = dec(await Store.get('wx:cfg'), null);
+      if (c && typeof c === 'object') this.cfg = Object.assign(this.cfg, c);
+    } catch (e) { /* ignore */ }
+    try {
+      const d = dec(await Store.get('weather'), null);
+      if (d && d.ts) this.data = d;
+    } catch (e) { /* ignore */ }
+    this.syncForm();
+    this.render();
+  },
+  async saveCfg() { try { await Store.set('wx:cfg', enc(this.cfg)); } catch (e) { /* ignore */ } },
+  async save() { try { await Store.set('weather', enc(this.data)); } catch (e) { /* ignore */ } },
+
+  syncForm() {
+    const on = $('#wxOn'), geo = $('#wxGeo'), city = $('#wxCity');
+    if (on) on.checked = this.cfg.on !== false;
+    if (geo) geo.checked = this.cfg.geo !== false;
+    if (city) city.value = this.cfg.city || '';
+  },
+  readForm() {
+    const on = $('#wxOn'), geo = $('#wxGeo'), city = $('#wxCity');
+    if (on) this.cfg.on = on.checked;
+    if (geo) this.cfg.geo = geo.checked;
+    if (city) this.cfg.city = (city.value || '').trim();
+  },
+
+  async fetchJson(url) {
+    const ctl = new AbortController();
+    const tm = setTimeout(() => ctl.abort(), 10000);
+    try {
+      const r = await fetch(url, { signal: ctl.signal });
+      if (!r.ok) throw new Error('http' + r.status);
+      return await r.json();
+    } catch (e) {
+      if (e && /^http/.test(e.message)) throw e;
+      throw new Error('wxNet');
+    } finally { clearTimeout(tm); }
+  },
+
+  geo() {
+    return new Promise((resolve, reject) => {
+      if (!window.isSecureContext) return reject(new Error('geoInsecure'));
+      if (!navigator.geolocation) return reject(new Error('noGeo'));
+      navigator.geolocation.getCurrentPosition(
+        p => resolve(p.coords),
+        e => reject(new Error(e && e.code === 1 ? 'geoDenied' : 'geoFail')),
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 10 * 60 * 1000 }
+      );
+    });
+  },
+
+  async cityName(lat, lon) {
+    try {
+      const j = await this.fetchJson('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude='
+        + lat + '&longitude=' + lon + '&localityLanguage=zh');
+      return j.city || j.locality || j.principalSubdivision || '';
+    } catch (e) { return ''; }
+  },
+
+  async byCoords(lat, lon, city, via) {
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + Number(lat).toFixed(3)
+      + '&longitude=' + Number(lon).toFixed(3)
+      + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m'
+      + '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max'
+      + '&timezone=auto&forecast_days=1';
+    const j = await this.fetchJson(url);
+    const c = j.current || {}, d = j.daily || {};
+    const first = (a) => (Array.isArray(a) && a.length ? a[0] : null);
+    this.data = {
+      key: this.cfgKey(), via: via || '',
+      city: city || '', lat: Number(lat), lon: Number(lon),
+      tz: j.timezone || '', tzAbbr: j.timezone_abbreviation || '',
+      utcOffset: typeof j.utc_offset_seconds === 'number' ? j.utc_offset_seconds : null,
+      temp: c.temperature_2m, feels: c.apparent_temperature, hum: c.relative_humidity_2m,
+      code: c.weather_code, wind: c.wind_speed_10m,
+      tmax: first(d.temperature_2m_max), tmin: first(d.temperature_2m_min),
+      rain: first(d.precipitation_probability_max), uv: first(d.uv_index_max),
+      ts: Date.now()
+    };
+    await this.save();
+    this.render();
+    return this.data;
+  },
+
+  async locate() {
+    const co = await this.geo();
+    const city = await this.cityName(co.latitude, co.longitude);
+    return await this.byCoords(co.latitude, co.longitude, city, 'geo');
+  },
+
+  async byCity(name) {
+    const j = await this.fetchJson('https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name='
+      + encodeURIComponent(name));
+    const g = j && j.results && j.results[0];
+    if (!g) throw new Error('noCity');
+    const label = (g.name || name) + (g.country && !/中国|China/i.test(g.country) ? '（' + g.country + '）' : '');
+    return await this.byCoords(g.latitude, g.longitude, label, 'city');
+  },
+
+  /* 按设置取一次：开了定位先定位，失败用城市兜底 */
+  async fetchNow() {
+    let geoErr = null;
+    if (this.cfg.geo) {
+      try { return await this.locate(); } catch (e) { geoErr = e; }
+    }
+    if ((this.cfg.city || '').trim()) {
+      try { return await this.byCity(this.cfg.city.trim()); }
+      catch (e) { if (geoErr) e.geoErr = geoErr; throw e; }
+    }
+    throw geoErr || new Error('noWhere');
+  },
+
+  errText(e) {
+    const m = (e && e.message) || String(e);
+    const map = {
+      geoInsecure: '当前页面不是 https，浏览器不让定位',
+      noGeo: '这个浏览器不支持定位',
+      geoDenied: '定位权限被拒绝了',
+      geoFail: '定位超时或失败',
+      noCity: '没找到这个城市，换个写法试试（如 Shanghai / Hangzhou）',
+      noWhere: '没有可用的位置：关掉了定位，也没填城市',
+      wxNet: '天气接口连不上，检查一下网络'
+    };
+    let s = map[m] || ('天气获取失败（' + m + '）');
+    if (e && e.geoErr) s = (map[e.geoErr.message] || '定位失败') + '；按城市查也失败：' + s;
+    else if (/^geo|noGeo/.test(m)) s += '。关掉定位、在上面手填城市英文名就行';
+    return s;
+  },
+
+  /* 设置页「测试获取」 */
+  async test() {
+    if (this.busy) return;
+    this.readForm();
+    await this.saveCfg();
+    this.busy = true;
+    const info = $('#wxInfo'), btn = $('#btnWxTest');
+    if (btn) btn.disabled = true;
+    if (info) { info.className = 'wx-info'; info.textContent = '正在获取…'; }
+    try {
+      const d = await this.fetchNow();
+      this.failAt = 0;
+      this.render();
+      toast('拿到了：' + (d.city || '当前位置') + ' ' + (this.desc(d.code) || '') + ' '
+        + (d.temp != null ? Math.round(d.temp) + '°C' : ''));
+    } catch (e) {
+      if (info) { info.className = 'wx-info bad'; info.textContent = '❌ ' + this.errText(e) + '\n现在的时间：' + this.timeText(); }
+      this.renderBadge();
+    } finally {
+      this.busy = false;
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  /* 调用 AI 前用：过期就静默刷新，最多等 maxWait 毫秒，失败返回旧数据或 null，绝不抛错 */
+  async ensure(maxWait) {
+    if (!this.cfg.on) return null;
+    if (this.fresh()) return this.data;
+    if (this.failAt && Date.now() - this.failAt < 10 * 60 * 1000) return this.data;
+    if (!this.cfg.geo && !(this.cfg.city || '').trim()) return this.data;
+    const job = this.fetchNow()
+      .then(d => { this.failAt = 0; return d; })
+      .catch(e => { this.failAt = Date.now(); console.warn('天气刷新失败', e); return this.data; });
+    if (!maxWait) return await job;
+    return await Promise.race([job, sleep(maxWait).then(() => this.data)]);
+  },
+
+  /* 一行天气，给人看 / 给本地台词用 */
+  shortText() {
+    const d = this.data;
+    if (!d || !this.cfg.on) return '';
+    let s = (d.city ? d.city + ' ' : '') + (this.desc(d.code) || '');
+    if (d.temp != null) s += ' ' + Math.round(d.temp) + '°C';
+    return s.trim();
+  },
+
+  renderBadge() {
+    const b = $('#wxState');
+    if (!b) return;
+    if (!this.cfg.on) b.textContent = '只给时间';
+    else if (this.data) b.textContent = this.shortText() || '已获取';
+    else b.textContent = '未获取';
+  },
+
+  render() {
+    this.renderBadge();
+    const fit = $('#fitEnvLine');
+    if (fit) {
+      const w = this.shortText();
+      fit.textContent = '他知道：' + this.timeText() + ' · ' + this.season() + (w ? ' · ' + w : '')
+        + (this.cfg.on ? '' : '（天气已在设置里关闭）');
+    }
+    const info = $('#wxInfo');
+    if (!info) return;
+    const d = this.data;
+    if (!d) {
+      info.className = 'wx-info';
+      info.textContent = '还没获取天气。开着定位直接点「测试获取」，定位不了就关掉定位、填城市英文名再测。\n现在的时间：'
+        + this.timeText() + ' · ' + this.season();
+      return;
+    }
+    info.className = 'wx-info ok';
+    let s = '✅ ' + (d.city || '当前位置') + ' · ' + (this.desc(d.code) || '天气未知');
+    if (d.temp != null) s += ' ' + Math.round(d.temp) + '°C';
+    if (d.feels != null) s += '（体感 ' + Math.round(d.feels) + '°C）';
+    if (d.tmin != null && d.tmax != null) s += '\n今天 ' + Math.round(d.tmin) + '~' + Math.round(d.tmax) + '°C';
+    if (d.rain != null) s += ' · 降水概率 ' + d.rain + '%';
+    if (d.hum != null) s += ' · 湿度 ' + Math.round(d.hum) + '%';
+    s += '\n当地时间：' + this.timeText() + (d.tzAbbr ? '（' + d.tzAbbr + '）' : '') + ' · ' + this.season();
+    const mins = Math.round((Date.now() - d.ts) / 60000);
+    s += '\n' + (d.via === 'geo' ? '来自定位，' : (d.via === 'city' ? '按城市查询，' : ''))
+      + (mins < 1 ? '刚刚更新' : (mins < 60 ? mins + ' 分钟前更新' : Math.round(mins / 60) + ' 小时前更新'))
+      + (this.fresh() ? '' : '，下次调用 AI 前会自动刷新');
+    if (!this.cfg.on) s += '\n（「角色可以读取天气」已关闭，他只知道时间）';
+    info.textContent = s;
+  },
+
+  /* 给模型看的一段 */
+  promptText() {
+    const n = this.now();
+    const lines = ['现在是 ' + this.timeText() + (n.place ? '（' + n.place + '当地时间）' : '') + '，' + this.season() + '。'];
+    const d = this.data;
+    if (d && this.cfg.on) {
+      const bits = [];
+      if (d.city) bits.push('她在' + d.city);
+      const w = this.desc(d.code);
+      if (w) bits.push('天气' + w);
+      if (d.temp != null) bits.push('气温 ' + Math.round(d.temp) + '°C'
+        + (d.feels != null ? '（体感 ' + Math.round(d.feels) + '°C）' : ''));
+      if (d.tmin != null && d.tmax != null) bits.push('全天 ' + Math.round(d.tmin) + '~' + Math.round(d.tmax) + '°C');
+      if (d.rain != null) bits.push('降水概率 ' + d.rain + '%');
+      if (d.hum != null) bits.push('湿度 ' + Math.round(d.hum) + '%');
+      if (d.wind != null) bits.push('风速 ' + Math.round(d.wind) + 'km/h');
+      if (d.uv != null) bits.push('紫外线指数 ' + Math.round(d.uv));
+      if (bits.length) lines.push(bits.join('，') + '。');
+      if (!this.fresh()) lines.push('（这份天气是 ' + Math.max(1, Math.round((Date.now() - d.ts) / 3600000)) + ' 小时前的，仅供参考）');
+    }
+    return lines.join('\n');
+  },
+
+  /* 拼进 system prompt 的整段 */
+  envBlock() {
+    return '【此刻】\n' + this.promptText()
+      + '\n这是你自然知道的现实情况。合适的时候可以自然地带进话里（比如天冷让她加衣、下雨提醒带伞、很晚了催她睡），'
+      + '但不要每句都提，也不要像播报天气。';
+  }
+};
+
+/* ---------- 角色陪伴：小头像 + 台词气泡 ----------
+ * 台词尽量跟着本来就要发的那次接口一起生成（识图 JSON 里多一个 say 字段、
+ * 搭配回复里多几段【开场】【挑选中】【收尾】），不额外多花调用。
+ * 没调接口的小动作用本地短句。 */
+const BUDDY_LINES = {
+  saved: ['收好了。', '又多一件，衣柜要装不下了吧。', '这件我记住了。', '挂好了，下次搭配算它一个。'],
+  savedLook: ['这套存下了，哪天穿出去给我看看。', '存好了，挺像你会穿的。', '记下了。别光存，穿出去。'],
+  random: ['随手抽的，敢不敢穿是你的事。', '抽出来这套……你自己看着办。', '运气搭配，不满意再抽一次。']
+};
+
+const Buddy = {
+  on: true,
+  who: 'active',
+  queue: [],
+  timer: null,
+  last: [],
+  lastAt: 0,
+  thinking: false,
+  greeted: false,
+
+  role() {
+    /* 试衣间里陪着你的就是正在帮你挑 / 点评的那位，台词口吻和头像才对得上 */
+    if (S.page === 'fitting' && S.charId && Roles.byId(S.charId)) return Roles.byId(S.charId);
+    if (this.who && this.who !== 'active') {
+      const r = Roles.byId(this.who);
+      if (r) return r;
+    }
+    return Roles.byId(S.charId) || Roles.active || null;
+  },
+  enabled() { return this.on && !!this.role(); },
+  pageOk() { return S.page === 'closet' || S.page === 'fitting'; },
+
+  async load() {
+    try {
+      const c = dec(await Store.get('buddy:cfg'), null);
+      if (c && typeof c === 'object') { this.on = c.on !== false; this.who = c.who || 'active'; }
+    } catch (e) { /* ignore */ }
+    this.syncForm();
+    this.refresh();
+  },
+  async save() { try { await Store.set('buddy:cfg', enc({ on: this.on, who: this.who })); } catch (e) { /* ignore */ } },
+
+  syncForm() {
+    const on = $('#buddyOn');
+    if (on) on.checked = this.on;
+    const sel = $('#buddyWho');
+    if (sel) {
+      sel.innerHTML = '';
+      const o = document.createElement('option');
+      o.value = 'active'; o.textContent = '当前聊天 / 试衣间选中的那位';
+      sel.appendChild(o);
+      (Roles.list || []).forEach(r => {
+        const x = document.createElement('option');
+        x.value = r.id; x.textContent = '固定：' + (r.name || '未命名');
+        sel.appendChild(x);
+      });
+      sel.value = Roles.byId(this.who) ? this.who : 'active';
+    }
+    const b = $('#buddyState');
+    if (b) b.textContent = this.on ? '开' : '关';
+  },
+
+  /* 换页 / 换角色 / 改设置后调一下 */
+  refresh() {
+    const el = $('#buddy');
+    if (!el) return;
+    const r = this.role();
+    const show = this.enabled() && this.pageOk();
+    el.classList.toggle('on', show);
+    if (!show) { this.hide(); return; }
+    const av = $('#buddyAv');
+    const src = (r && r.avatar) || defaultAvatar(r ? r.name : '他', '#3a2f38');
+    if (av && av.getAttribute('src') !== src) av.src = src;
+    $('#buddyName').textContent = (r && r.name) || '他';
+  },
+
+  clean(text) {
+    let s = String(text || '').trim();
+    s = s.replace(/^[「""']+|[」""']+$/g, '').replace(/^\s*[-·•]\s*/, '').trim();
+    if (s.length > 160) s = s.slice(0, 158) + '…';
+    return s;
+  },
+  html(text) {
+    return escHtml(text).replace(/\*([^*\n]{1,80})\*/g, '<i class="act">$1</i>');
+  },
+
+  /* 一段话 → 几条气泡：按他换行分的条来，条数不超过这位角色设置的上限 */
+  pieces(text) {
+    const r = this.role();
+    return splitBubbles(stripActs(text, r), { max: bubRange(r)[1] }).map(p => this.clean(p)).filter(Boolean);
+  },
+  stack() { return $('#buddyTxt'); },
+  dropTyping() {
+    const st = this.stack();
+    if (!st) return;
+    Array.prototype.slice.call(st.querySelectorAll('.buddy-line.typing-line')).forEach(n => n.remove());
+  },
+  addLine(html, cls) {
+    const st = this.stack();
+    if (!st) return;
+    Array.prototype.slice.call(st.children).forEach(n => n.classList.add('old'));
+    const d = document.createElement('div');
+    d.className = 'buddy-line' + (cls ? ' ' + cls : '');
+    d.innerHTML = html;
+    st.appendChild(d);
+    /* 最多留 4 条，旧的往上挤掉 */
+    while (st.children.length > 4) st.removeChild(st.firstChild);
+  },
+
+  /* item: { text }。还在说话就接着往下叠；安静过一阵再开口才清掉上一轮 */
+  show(item) {
+    const el = $('#buddy');
+    if (!el) return;
+    this.refresh();
+    clearTimeout(this.timer);
+    const st = this.stack();
+    if (st && !el.classList.contains('talk')) st.innerHTML = '';
+    this.dropTyping();
+    this.addLine(this.html(item.text));
+    el.classList.add('talk');
+    const lastOne = !this.queue.length;
+    const hold = Math.max(1600, Math.min(6000, 1100 + item.text.length * 95)) + (lastOne ? 2600 : 0);
+    this.timer = setTimeout(() => this.next(), hold);
+  },
+  next() {
+    clearTimeout(this.timer);
+    const t = this.queue.shift();
+    if (t) return this.show(t);
+    if (this.thinking) return this.showThink();
+    this.hide();
+  },
+  hide() {
+    clearTimeout(this.timer);
+    const el = $('#buddy');
+    if (el) el.classList.remove('talk');
+  },
+
+  /* opt.now：插队立即说（批量识图这种连续进度用）；否则排队按顺序说 */
+  say(text, opt) {
+    opt = opt || {};
+    text = this.clean(text);
+    if (!text || !this.enabled()) return;
+    this.last.push(text);
+    if (this.last.length > 8) this.last.shift();
+    this.lastAt = Date.now();
+    this.play(text, !!opt.now);
+  },
+  play(text, now) {
+    const items = this.pieces(text).map(p => ({ text: p }));
+    if (!items.length) return;
+    if (now) { this.queue = items.slice(1); this.show(items[0]); return; }
+    const el = $('#buddy');
+    const busy = el && el.classList.contains('talk') && !this.isThinkShown();
+    this.queue = this.queue.concat(items);
+    if (!busy) this.next();
+  },
+  spokeSince(ts) { return this.lastAt >= ts; },
+
+  /* 等接口时显示「…」，像对方正在输入 */
+  think() {
+    if (!this.enabled()) return;
+    this.thinking = true;
+    this.showThink();
+  },
+  /* 省略号直接挂在最后一条下面；不打断正在排队的台词 */
+  showThink() {
+    const el = $('#buddy');
+    if (!el) return;
+    this.refresh();
+    const st = this.stack();
+    if (st && !el.classList.contains('talk')) st.innerHTML = '';
+    if (!this.isThinkShown()) this.addLine('<div class="typing"><i></i><i></i><i></i></div>', 'typing-line');
+    el.classList.add('talk');
+  },
+  isThinkShown() { const t = this.stack(); return !!(t && t.querySelector('.typing-line')); },
+  stopThink() {
+    this.thinking = false;
+    if (!this.isThinkShown()) return;
+    this.dropTyping();
+    const st = this.stack();
+    if (this.queue.length) this.next();
+    else if (!st || !st.children.length) this.hide();
+    else {
+      /* 省略号收掉后，最后那条再停留一会儿 */
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.next(), 3200);
+    }
+  },
+
+  /* 没调接口的小动作：最近刚说过话就别抢 */
+  event(kind) {
+    if (!this.enabled() || Date.now() - this.lastAt < 6000) return;
+    const arr = BUDDY_LINES[kind];
+    if (!arr || !arr.length) return;
+    this.say(arr[Math.floor(Math.random() * arr.length)]);
+  },
+
+  greetLine() {
+    const n = Weather.now();
+    const part = Weather.dayPart(n.h);
+    let s = ({ 清晨: '起这么早。', 上午: '早。', 中午: '中午了，吃饭没？', 下午: '下午好。', 傍晚: '天快黑了。', 晚上: '晚上好。', 深夜: '这么晚还在翻衣柜？' })[part] || '嗨。';
+    const d = Weather.cfg.on ? Weather.data : null;
+    if (d) {
+      const w = Weather.desc(d.code);
+      if (w || d.temp != null) s += '外面' + (w || '') + (d.temp != null ? '，' + Math.round(d.temp) + '°C' : '') + '。';
+      if (d.rain != null && d.rain >= 60) s += '可能下雨，记得带伞。';
+      else if (d.temp != null && d.temp <= 8) s += '冷，穿厚点。';
+      else if (d.temp != null && d.temp >= 30) s += '很热，穿清爽点。';
+    } else {
+      s += '现在是' + Weather.season() + '。';
+    }
+    return s + '今天想穿成什么样？';
+  },
+  greetOnce() {
+    if (this.greeted || !this.enabled()) return;
+    this.greeted = true;
+    setTimeout(() => { if (S.page === 'fitting') this.say(this.greetLine()); }, 500);
+  },
+
+  /* 点头像：在说话就收起；没在说就重播刚才那句（没有就打个招呼） */
+  tapAvatar() {
+    const el = $('#buddy');
+    if (el && el.classList.contains('talk') && !this.isThinkShown()) { this.queue = []; this.hide(); return; }
+    const t = this.last[this.last.length - 1];
+    if (t) this.play(t, true);
+    else this.say(this.greetLine());
+  }
+};
+
+/* 给「顺带说一句」用的人设简介：完整人设太长，截一段够把口吻带出来 */
+function buddyPersona(role) {
+  if (!role) return '';
+  const p = role.prompt ? String(applyVars(role.prompt, role)).replace(/\s+/g, ' ') : '';
+  return '你是「' + (role.name || '他') + '」' + (p ? '，人设：' + cut(p, 360) : '')
+    + '。你说话的对象是' + (Me.name || '她') + '。' + actsRule(role);
+}
+
+/* 流式回复里某一段写完（下一个【出现）就立刻回调，用来边生成边让他开口 */
+function sectionStreamer(names, onSection) {
+  const done = {};
+  const fn = (full) => {
+    names.forEach(n => {
+      if (done[n]) return;
+      const tag = '【' + n + '】';
+      const i = full.indexOf(tag);
+      if (i < 0) return;
+      const rest = full.slice(i + tag.length);
+      const j = rest.indexOf('【');
+      if (j < 0) return;
+      done[n] = true;
+      onSection(n, rest.slice(0, j).trim());
+    });
+  };
+  /* 回复结束后把没来得及回调的段补上 */
+  fn.flush = (full) => {
+    names.forEach(n => {
+      if (done[n]) return;
+      done[n] = true;
+      const v = pickSection(full, n);
+      if (v) onSection(n, v);
+    });
+  };
+  return fn;
+}
+/* 去掉只给陪伴气泡用的段落，留下给人看的正文 */
+function stripSections(text, names) {
+  let s = String(text || '');
+  names.forEach(n => {
+    s = s.replace(new RegExp('\\n?【' + n + '】[\\s\\S]*?(?=\\n【|$)'), '');
+  });
+  return s.trim();
+}
+
+/* 一件衣服压成一行，给「整个衣柜」模式用：备注截短，省 token */
+function itemBrief(it) {
+  const parts = [it.name || '未命名'];
+  parts.push(it.category || '未分类');
+  if (it.tags && it.tags.length) parts.push(it.tags.join('/'));
+  if (it.note) parts.push(cut(it.note, 40));
+  if (!(it.tags && it.tags.length) && !it.note && !it.name) parts.push('（没打标签）');
+  return '[' + it.id + '] ' + parts.join('·');
+}
+
+/* 整个衣柜清单，太长就截断，避免撑爆上下文 */
+const WARDROBE_LIST_MAX = 36000;
+function wardrobeBriefList(L) {
+  const out = [];
+  let len = 0, dropped = 0;
+  L.forEach(i => {
+    const line = itemBrief(i);
+    if (len + line.length > WARDROBE_LIST_MAX) { dropped++; return; }
+    out.push(line); len += line.length + 1;
+  });
+  if (dropped) out.push('（衣柜太大，还有 ' + dropped + ' 件没列出来）');
+  return out.join('\n');
+}
+
+/* 识图描述在本次打开页面内缓存，重试 / 换要求时不用重复看图 */
+const VISION_CACHE = {};
+async function lookAtItems(list, t) {
+  const notes = {};
+  let looked = 0;
+  /* 开着陪伴时，每看一张图顺带让他用自己的口吻说一句——同一次调用，不多花钱 */
+  const who = Buddy.enabled() ? Buddy.role() : null;
+  const prompt = who
+    ? '请看这张衣服照片，严格输出两行，不要别的内容：\n'
+      + '描述：一句话客观描述这件衣服的颜色、材质观感、厚薄和版型细节\n'
+      + '台词：' + buddyPersona(who) + '你正在帮她从衣柜里挑今天穿的衣服，看到这件随口说一句'
+      + '（25 字以内，口吻自然，可以联想到此刻的天气或时间）\n\n' + Weather.promptText()
+    : '用一句话客观描述这件衣服的颜色、材质观感、厚薄和版型细节。';
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i];
+    const key = it.id + ':' + String(it.thumb || '').length;
+    if (VISION_CACHE[key]) { notes[it.id] = VISION_CACHE[key]; looked++; continue; }
+    t.update('正在看第 ' + (i + 1) + '/' + list.length + ' 张图…');
+    const full = await Store.get('im:' + it.id);
+    try {
+      const r = await visionSafe(prompt, full || it.thumb, 'auto');
+      if (r && r.text) {
+        const raw = r.text.trim();
+        const md = raw.match(/描述[:：]\s*([^\n]+)/);
+        const ml = raw.match(/台词[:：]\s*([^\n]+)/);
+        VISION_CACHE[key] = md ? md[1].trim() : raw.replace(/\n?台词[:：][^\n]*/, '').trim();
+        notes[it.id] = VISION_CACHE[key];
+        looked++;
+        if (ml) Buddy.say(ml[1], { now: true });
+      }
+    } catch (e) {
+      console.warn('识图失败，跳过这张', e);
+      const msg = (e && e.message) || String(e);
+      if (VISION_STOP.indexOf(msg) >= 0) {
+        t.update('识图用不了（' + humanErr(e) + '），改为按标签和备注搭配…');
+        await sleep(1200);
+        break;
+      }
+      if (msg === 'rateLimited') {
+        t.update('接口限速，已看 ' + looked + ' 张，剩下的按标签搭…');
+        await sleep(1200);
+        break;
+      }
+    }
+  }
+  return { notes, looked };
+}
+
+/* 识图 + 整个衣柜：衣服太多不可能张张看，先让模型按文字信息粗筛候选 */
+async function shortlistForVision(L, n, ctx) {
+  const withImg = L.filter(i => i.thumb);
+  if (withImg.length <= n) return withImg;
+  let ids = [];
+  const who = Buddy.enabled() ? Buddy.role() : null;
+  try {
+    const sys = '你是穿搭助理。用户的衣柜清单每行开头方括号里是衣服 id。'
+      + '请为接下来的看图精选，挑出最多 ' + n + ' 件最值得看照片的候选单品：'
+      + '要覆盖能凑成一整套的不同品类（上装/下装或连衣裙/鞋/外套/配饰等），'
+      + '并符合下面的天气季节和用户要求。没打标签的衣服信息少，也可以适当放进候选。'
+      + (who
+          ? '\n输出两行：第一行只写 id，用英文逗号分隔；第二行以「台词：」开头，'
+            + '用下面这个角色的口吻对她说一句准备开始翻衣柜时的开场白（可以结合此刻的时间、天气和她的要求，30 字以内）。\n'
+            + buddyPersona(who)
+          : '只输出 id，用英文逗号分隔，不要任何别的文字。');
+    const user = ctx + '\n\n衣柜清单：\n' + wardrobeBriefList(withImg);
+    const text = await aiRequest([{ role: 'system', content: sys }, { role: 'user', content: user }],
+      { temp: who ? 0.7 : 0.4, stream: false });
+    ids = withImg.filter(i => String(text || '').indexOf(i.id) >= 0).map(i => i.id);
+    const ml = String(text || '').match(/台词[:：]\s*([^\n]+)/);
+    if (ml) Buddy.say(ml[1], { now: true });
+  } catch (e) {
+    console.warn('粗筛失败，改为按品类轮流抽', e);
+  }
+  let picked = withImg.filter(i => ids.indexOf(i.id) >= 0).slice(0, n);
+  if (picked.length < n) {
+    /* 粗筛没给够：按品类轮流补齐，保证各品类都有候选 */
+    const byCat = {};
+    withImg.forEach(i => {
+      if (picked.indexOf(i) >= 0) return;
+      const c = i.category || '未分类';
+      (byCat[c] = byCat[c] || []).push(i);
+    });
+    const cats = Object.keys(byCat);
+    let k = 0;
+    while (picked.length < n && cats.some(c => byCat[c].length)) {
+      const c = cats[k++ % cats.length];
+      if (byCat[c].length) picked.push(byCat[c].splice(Math.floor(Math.random() * byCat[c].length), 1)[0]);
+    }
+  }
+  return picked;
+}
+
+/* 用户要求 + 天气季节，拼成一段上下文 */
+async function buildAskContext(t) {
+  const lines = [];
+  if (Weather.cfg.on && !Weather.fresh()) t.update('正在看看外面天气…');
+  await Weather.ensure(6000);
+  lines.push('【今天的情况】\n' + Weather.promptText());
+  const req = (($('#askReq') && $('#askReq').value) || '').trim();
+  lines.push(req
+    ? '【我的要求】\n' + req
+    : '【我的要求】\n没有特别要求，你按自己的审美和对我的了解来挑。');
+  return { text: lines.join('\n\n'), req: req };
+}
+
+/* 从回复里认出用了哪几件 */
+function parseChosenIds(text, pool) {
+  const sec = pickSection(text, '选用');
+  const src = sec || String(text || '');
+  return pool.filter(i => src.indexOf(i.id) >= 0).map(i => i.id);
+}
+/* 展示前去掉 id 那一段，正文里漏出来的 id 换成衣服名 */
+function cleanVerdictText(text, pool) {
+  let s = stripSections(text, ['选用', '开场', '挑选中', '收尾', '台词']);
+  pool.forEach(i => {
+    if (s.indexOf(i.id) < 0) return;
+    const nm = '「' + (i.name || i.category || '这件') + '」';
+    s = s.split('[' + i.id + ']').join(nm).split(i.id).join(nm);
+  });
+  return s;
+}
+/* 试衣间里的点评：搭配方案单独一块，他说的话拆成聊天气泡一条条冒出来 */
+function renderVerdict(el, text, role) {
+  if (!el) return;
+  el.innerHTML = '';
+  el.classList.add('vd');
+  const r = role || Roles.byId(S.charId) || Roles.active || { name: S.charName || '他' };
+  const plan = pickSection(text, '搭配');
+  const say = pickSection(text, '点评');
+  const en = pickSection(text, '英文提示词');
+  if (plan) {
+    const p = document.createElement('div');
+    p.className = 'vd-plan';
+    p.innerHTML = '<b>这一套</b>' + escHtml(plan);
+    el.appendChild(p);
+  }
+  const speech = say || ((plan || en) ? '' : String(text || ''));
+  const rg = bubRange(r && r.id ? r : null);
+  const pieces = splitBubbles(stripActs(speech, r && r.id ? r : null), { min: rg[0], max: rg[1] });
+  const box = document.createElement('div');
+  box.className = 'vd-msgs';
+  pieces.forEach((t, k) => {
+    const row = buildMsgEl({ role: 'ai', text: t, ts: 0 }, r, -1, k > 0);
+    row.style.animationDelay = (0.15 + k * 0.6).toFixed(2) + 's';
+    box.appendChild(row);
+  });
+  if (pieces.length) el.appendChild(box);
+  if (en) {
+    const e = document.createElement('div');
+    e.className = 'vd-en';
+    e.textContent = '英文提示词：' + en;
+    el.appendChild(e);
+  }
+  if (!el.childNodes.length) el.textContent = '（没有拿到内容，再试一次）';
+}
+function setVerdictText(el, text) {
+  if (!el) return;
+  el.classList.remove('vd');
+  el.textContent = text;
+}
+
+function drawVerdictThumbs(ids) {
+  const box = $('#verdictThumbs');
+  if (!box) return;
+  box.innerHTML = '';
+  (ids || []).forEach(id => {
+    const it = S.items.find(i => i.id === id);
+    if (!it || !it.thumb) return;
+    const img = document.createElement('img');
+    img.src = it.thumb;
+    img.alt = it.name || '';
+    img.title = it.name || '';
+    box.appendChild(img);
+  });
 }
 
 function stepVision(d) {
@@ -4082,96 +5161,130 @@ function stepVision(d) {
 }
 
 async function askChar() {
-  const chosen = S.items.filter(i => S.picked.has(i.id) && !i.isDeleted);
-  if (!chosen.length) return toast('先去衣橱长按选几件衣服');
+  const scope = fitScope();
+  const pool = scope === 'all'
+    ? live()
+    : S.items.filter(i => S.picked.has(i.id) && !i.isDeleted);
+  if (!pool.length) {
+    return toast(scope === 'all' ? '衣柜还是空的，先去入库几件衣服' : '先去衣橱长按选几件衣服，或者切到「整个衣柜随他挑」');
+  }
   if (!S.charId) return toast('先挑一位角色');
 
   const btn = $('#btnAsk');
   btn.disabled = true;
   const mode = fitMode();
   const t = toast('正在请 ' + (S.charName || '他') + ' 过目…', { loading: true });
+  /* 陪伴台词：跟着这次搭配请求一起生成；陪伴的是正在帮你挑的这位 */
+  const who = Buddy.enabled() ? Buddy.role() : null;
+  const t0 = Date.now();
+  if (who) Buddy.think();
 
   try {
-    let visionNote = '';
+    const ctx = await buildAskContext(t);
+    let notes = {};
     let looked = 0;
 
     if (mode === 'vision') {
-      const withImg = chosen.filter(i => i.thumb).slice(0, visionCount());
-      if (!withImg.length) {
-        t.update('选中的衣服都没有照片，改为按文本搭配…');
+      let toLook;
+      if (scope === 'all') {
+        t.update('正在从衣柜里粗筛候选…');
+        toLook = await shortlistForVision(pool, visionCount(), ctx.text);
+      } else {
+        toLook = pool.filter(i => i.thumb).slice(0, visionCount());
       }
-      for (let i = 0; i < withImg.length; i++) {
-        t.update('正在看第 ' + (i + 1) + '/' + withImg.length + ' 张图…');
-        const full = await Store.get('im:' + withImg[i].id);
-        try {
-          const r = await visionSafe('用一句话客观描述这件衣服的颜色、材质观感和版型细节。',
-            full || withImg[i].thumb, 'auto');
-          if (r && r.text) {
-            visionNote += '\n（' + (withImg[i].name || withImg[i].id) + '看起来）' + r.text;
-            looked++;
-          }
-        } catch (e) {
-          console.warn('识图失败，跳过这张', e);
-          /* 单张失败不影响整体：剩下的仍按文本信息搭 */
-          const msg = (e && e.message) || String(e);
-          if (VISION_STOP.indexOf(msg) >= 0) {
-            /* 配置问题，后面每张都一样会失败 → 直接转纯文本搭配 */
-            t.update('识图用不了（' + humanErr(e) + '），改为按标签和备注搭配…');
-            await sleep(1200);
-            break;
-          }
-          if (msg === 'rateLimited') {
-            /* 被限速：已看过的照样算，剩下的不硬等 */
-            t.update('接口限速，已看 ' + looked + ' 张，剩下的按标签搭…');
-            await sleep(1200);
-            break;
-          }
-        }
-      }
-      t.update('正在组织点评…');
+      if (!toLook.length) t.update('没有带照片的衣服，改为按文本搭配…');
+      const r = await lookAtItems(toLook, t);
+      notes = r.notes; looked = r.looked;
     }
+    t.update('正在组织搭配…');
 
-    const sys = '你是用户的私人穿搭顾问。用户会给你她衣橱里的几件衣服，'
-      + '请你挑出其中能搭在一起的，给出一套搭配方案和你自己的点评。\n'
-      + (visionNote
-          ? '其中部分单品附有视觉观察，请优先采信视觉观察；没有视觉观察的按文本信息判断。\n'
+    const hasNotes = Object.keys(notes).length > 0;
+    /* 识图阶段他已经开过口了，就不再要开场白 */
+    const wantOpen = !!who && !Buddy.spokeSince(t0);
+    const listText = scope === 'all'
+      ? wardrobeBriefList(pool)
+      : pool.map(i => itemBrief(i)).join('\n');
+    const noteText = hasNotes
+      ? pool.filter(i => notes[i.id]).map(i => '[' + i.id + '] ' + (i.name || i.category || '') + '：' + notes[i.id]).join('\n')
+      : '';
+
+    const sys = '你是用户的私人穿搭顾问。'
+      + (scope === 'all'
+          ? '下面是用户衣柜里的全部衣服（每行开头方括号里是这件衣服的 id）。'
+            + '请你亲自从中挑出能搭成一整套出门造型的单品——一般是上装+下装（或连衣裙）+鞋，'
+            + '再按需要加外套、袜子、包和配饰，给出方案和你自己的点评。\n'
+          : '用户先选了几件衣服（每行开头方括号里是 id），请你挑出其中能搭在一起的，给出一套搭配方案和你自己的点评。\n')
+      + '一定要考虑当天的季节、气温和天气：冷就保暖叠穿，热就清爽透气，下雨要考虑鞋和外套，暴晒考虑防晒；'
+      + '季节标签明显不合适的衣服不要选。\n'
+      + '用户提了要求就优先满足要求；没提要求就完全按你自己的审美和对她的了解来挑。\n'
+      + '只能用清单里真实存在的衣服，不要编造；缺某个品类就直说缺什么、建议怎么补。\n'
+      + (hasNotes
+          ? '部分单品附有你看过照片后的视觉观察，请优先采信视觉观察；其余单品按文字信息判断。\n'
           : '你看不到照片，请完全依据名字、品类、标签和备注来判断颜色、材质与风格。\n')
-      + '严格按下面三段输出，不要加别的小标题：\n'
-      + '【搭配】一两句话说清这套怎么穿（点名用到哪几件）\n'
-      + '【点评】三到五句你自己的审美和感受，保持你的说话方式\n'
-      + '【英文提示词】一行英文，逗号分隔的生图关键词，描述人穿着这套衣服的画面';
+      + (who
+          ? '除了方案本身，你还要像陪在她身边一样，在挑之前、挑的时候、挑完之后各对她说一句话，'
+            + '都用你自己的口吻，简短自然，像真人边翻衣柜边聊天，可以结合此刻的时间、天气和她的要求。\n'
+          : '')
+      + '严格按下面的段落和顺序输出，不要加别的小标题：\n'
+      + (wantOpen ? '【开场】一两句开场白（还没开始挑，先对她说点什么）\n' : '')
+      + (who ? '【挑选中】一句你一边翻她衣柜一边嘀咕的话\n' : '')
+      + '【搭配】一两句话说清这套怎么穿，用衣服名字点名用到哪几件（不要写 id）\n'
+      + '【点评】你自己的审美和感受，结合今天的天气，保持你的说话方式。'
+      + msgFormatRule(Roles.byId(S.charId), '这一段') + '\n'
+      + '【英文提示词】一行英文，逗号分隔的生图关键词，描述人穿着这套衣服的画面\n'
+      + '【选用】这套用到的衣服 id，用英文逗号分隔，只写 id'
+      + (who ? '\n【收尾】挑完以后对她说的一句话（比如催她换上、叮嘱带伞加衣、问她喜不喜欢）' : '');
 
-    const user = '这是我衣橱里的衣服：\n'
-      + chosen.map(describe).join('\n')
-      + (visionNote ? '\n\n补充的视觉观察：' + visionNote : '')
+    const user = ctx.text
+      + '\n\n' + (scope === 'all' ? '这是我衣柜里的全部衣服：\n' : '这是我选的几件衣服：\n')
+      + listText
+      + (noteText ? '\n\n你看过照片的视觉观察：\n' + noteText : '')
       + '\n\n帮我搭一套。';
 
-    const text = await Bridge.chat(
+    /* 流式时【开场】【挑选中】一写完就让他先开口，不用等整段生成完 */
+    const talk = sectionStreamer(['开场', '挑选中'], (n, v) => Buddy.say(v));
+    const raw = await Bridge.chat(
       [{ role: 'system', content: sys }, { role: 'user', content: user }],
-      S.charId
+      S.charId,
+      who ? { onDelta: (p, full) => talk(full) } : undefined
     );
+    if (who) {
+      talk.flush(raw);
+      Buddy.stopThink();
+      const end = pickSection(raw, '收尾');
+      if (end) Buddy.say(end);
+    }
 
-    const promptEn = pickSection(text, '英文提示词') || buildPromptEn(chosen);
+    let ids = parseChosenIds(raw, pool);
+    if (!ids.length && scope === 'picked') ids = pool.map(i => i.id);
+    const usedItems = pool.filter(i => ids.indexOf(i.id) >= 0);
+    const text = cleanVerdictText(raw, pool);
+    const promptEn = pickSection(text, '英文提示词') || buildPromptEn(usedItems);
     S.lastVerdict = {
       comment: text,
       promptEn: promptEn,
-      itemIds: chosen.map(i => i.id),
+      itemIds: ids,
       charId: S.charId,
       charName: S.charName,
       genImage: '',
       mode: mode,
+      scope: scope,
+      req: ctx.req,
       looked: looked
     };
-    $('#verdict').textContent = text || '（没有拿到内容，再试一次）';
+    renderVerdict($('#verdict'), text, Roles.byId(S.charId));
+    drawVerdictThumbs(ids);
     $('#genBox').innerHTML = '';
     t.close();
-    toast(looked ? '点评来了（看了 ' + looked + ' 张图）' : '点评来了（按文本信息搭的）');
+    if (!ids.length) toast('他没说清用了哪几件，存搭配册时可能不带衣服图', { duration: 4000 });
+    else toast((looked ? '搭配来了（看了 ' + looked + ' 张图，' : '搭配来了（按文本信息，') + '用了 ' + ids.length + ' 件）');
   } catch (e) {
     t.close();
-    $('#verdict').textContent = humanErr(e);
+    setVerdictText($('#verdict'), humanErr(e));
     toast(humanErr(e), { duration: 4000 });
   } finally {
     btn.disabled = false;
+    Buddy.stopThink();
   }
 }
 
@@ -4420,6 +5533,7 @@ const LookNamer = {
     /* 存进搭配册是本地动作，不主动打扰角色；
        想让他看就点这个快捷操作，走 sendToChat 发进聊天。 */
     S.lastVerdict = v;
+    Buddy.event('savedLook');
     toast('已存进搭配册：' + lookTitle(look), {
       duration: 5000,
       action: '发给他看',
@@ -4805,8 +5919,11 @@ function go(page) {
     sc.scrollTop = 0;
   }
 
-  if (page === 'fitting') drawPickInfo();
+  if (page === 'fitting') { drawPickInfo(); Weather.render(); }
   if (page === 'archive') { drawStats(); drawLooks(); }
+  /* 陪伴小头像只在衣橱 / 试衣间出现；第一次进试衣间打个招呼 */
+  Buddy.refresh();
+  if (page === 'fitting') Buddy.greetOnce();
   if (page === 'chat') {
     /* 从别处切过来时回到会话列表；已经在某个聊天室里就保持不动 */
     if (chatView === 'room' && Chat.cur) {
@@ -4951,7 +6068,9 @@ function bind() {
     $('#panelSelf').style.display = isSelf ? 'block' : 'none';
     $('#panelChar').style.display = isSelf ? 'none' : 'block';
     $('#panelCharMode').style.display = isSelf ? 'none' : 'block';
+    $('#panelCharReq').style.display = isSelf ? 'none' : 'block';
     $('#panelCharAsk').style.display = isSelf ? 'none' : 'block';
+    syncModeUI();
     /* 自己搭模式下更新提示 */
     if (isSelf) {
       const n = S.picked.size;
@@ -5005,24 +6124,40 @@ function bind() {
     const btn = $('#btnSelfAskChar');
     btn.disabled = true;
     const t = toast('正在请 ' + (S.charName || '他') + ' 点评你的搭配…', { loading: true });
+    const who = Buddy.enabled() ? Buddy.role() : null;
+    if (who) Buddy.think();
 
     try {
+      await Weather.ensure(5000);
       const comment = ($('#selfComment').value || '').trim();
       const sys = '你是用户的私人穿搭顾问。用户已经自己搭好了一套衣服，'
         + '请你点评她搭得怎么样，给出你的看法和建议。保持你自己的说话方式。\n'
-        + '按下面两段输出：\n'
-        + '【点评】三到五句你的真实看法，可以夸也可以毒舌\n'
-        + '【英文提示词】一行英文，逗号分隔的生图关键词，描述人穿着这套衣服的画面';
+        + '结合此刻的季节、气温和天气判断这套合不合适（冷不冷、热不热、下雨方不方便）。\n'
+        + '按下面的段落和顺序输出，不要加别的小标题：\n'
+        + (who ? '【第一反应】看到这套的第一句话（一句，口语）\n' : '')
+        + '【点评】你的真实看法，可以夸也可以毒舌。' + msgFormatRule(Roles.byId(S.charId), '这一段') + '\n'
+        + '【英文提示词】一行英文，逗号分隔的生图关键词，描述人穿着这套衣服的画面'
+        + (who ? '\n【收尾】最后对她说的一句话（比如让她就这么穿出门，或者让她换掉哪件）' : '');
 
-      const user = '这是我自己搭的一套：\n'
+      const user = '【此刻】\n' + Weather.promptText()
+        + '\n\n这是我自己搭的一套：\n'
         + chosen.map(describe).join('\n')
         + (comment ? '\n\n我的想法：' + comment : '')
         + '\n\n你觉得怎么样？';
 
-      const text = await Bridge.chat(
+      const talk = sectionStreamer(['第一反应'], (n, v) => Buddy.say(v));
+      const raw = await Bridge.chat(
         [{ role: 'system', content: sys }, { role: 'user', content: user }],
-        S.charId
+        S.charId,
+        who ? { onDelta: (p, full) => talk(full) } : undefined
       );
+      if (who) {
+        talk.flush(raw);
+        Buddy.stopThink();
+        const end = pickSection(raw, '收尾');
+        if (end) Buddy.say(end);
+      }
+      const text = cleanVerdictText(stripSections(raw, ['第一反应']), chosen);
 
       t.close();
       toast('他的点评来了，看看满不满意');
@@ -5040,7 +6175,7 @@ function bind() {
         mode: 'self-review',
         looked: 0
       };
-      $('#selfVerdict').textContent = text || '（没有拿到点评）';
+      renderVerdict($('#selfVerdict'), text || '（没有拿到点评）', Roles.byId(S.charId));
       $('#selfReviewBox').style.display = 'block';
       /* 滚动到点评区让用户看到 */
       $('#selfReviewBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -5049,6 +6184,7 @@ function bind() {
       toast(humanErr(e), { duration: 4000 });
     } finally {
       btn.disabled = false;
+      Buddy.stopThink();
     }
   }
 
@@ -5067,6 +6203,38 @@ function bind() {
   /* 搭配模式：文本 / 识图 + 张数 */
   $('#modeText').onchange = () => { syncModeUI(); saveCfg(); };
   $('#modeVision').onchange = () => { syncModeUI(); saveCfg(); };
+  /* 挑选范围：整个衣柜 / 只在我选的几件里 */
+  $('#scopeAll').onchange = () => { syncModeUI(); saveCfg(); };
+  $('#scopePicked').onchange = () => { syncModeUI(); saveCfg(); };
+  /* 设置页：天气与时间 */
+  const wxChanged = async () => {
+    Weather.readForm();
+    await Weather.saveCfg();
+    Weather.render();
+  };
+  $('#wxOn').onchange = wxChanged;
+  $('#wxGeo').onchange = wxChanged;
+  $('#wxCity').addEventListener('change', wxChanged);
+  $('#wxCity').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); Weather.test(); }
+  });
+  $('#btnWxTest').onclick = () => Weather.test();
+
+  /* 设置页：角色陪伴 */
+  $('#buddyOn').onchange = async () => {
+    Buddy.on = $('#buddyOn').checked;
+    await Buddy.save();
+    Buddy.syncForm();
+    Buddy.refresh();
+  };
+  $('#buddyWho').onchange = async () => {
+    Buddy.who = $('#buddyWho').value || 'active';
+    await Buddy.save();
+    Buddy.refresh();
+  };
+  $('#buddyAv').onclick = () => Buddy.tapAvatar();
+  $('#buddyBub').onclick = () => { Buddy.queue = []; Buddy.hide(); };
+
   $('#visionMinus').onclick = () => { stepVision(-1); saveCfg(); };
   $('#visionPlus').onclick = () => { stepVision(1); saveCfg(); };
   $('#visionCount').addEventListener('input', syncModeUI);
@@ -5134,6 +6302,7 @@ function bind() {
     drawGrid(); drawPickInfo();
     toast('抽了 ' + S.picked.size + ' 件，凑齐 ' + Math.min(cats.length, S.picked.size)
       + ' 个类别。不满意可以再抽，或点「选取衣服」自己加减');
+    Buddy.event('random');
   };
   $('#btnClearPick').onclick = () => { S.picked.clear(); drawGrid(); drawPickInfo(); };
 
@@ -5177,6 +6346,50 @@ async function saveAIFromForm() {
   await saveAI();
 }
 
+/* 设置页：回复方式的角标和说明 */
+function drawStreamState() {
+  const m = AI.streamMode || 'auto';
+  const b = $('#streamState');
+  if (b) b.textContent = { auto: '自动', stream: '强制流式', once: '强制非流式' }[m] || '自动';
+  const h = $('#streamHint');
+  if (h) {
+    h.textContent = m !== 'auto' ? ''
+      : (AI.autoResolved === 'stream' ? '自动检测结果：你的接口支持流式。'
+        : (AI.autoResolved === 'once' ? '自动检测结果：你的接口不支持流式，已自动改用非流式。'
+          : '还没检测过，第一次聊天时会自动试一下。'));
+    h.style.margin = h.textContent ? '0 0 6px' : '0';
+  }
+}
+
+/* 角色设置：每次说几句 */
+function drawBubRange() {
+  const lo = $('#bubMin'), hi = $('#bubMax');
+  if (!lo || !hi) return;
+  if (!lo.options.length) {
+    for (let i = 1; i <= BUB_LIMIT; i++) {
+      [lo, hi].forEach(sel => {
+        const o = document.createElement('option');
+        o.value = String(i); o.textContent = i + ' 句';
+        sel.appendChild(o);
+      });
+    }
+  }
+  const r = bubRange(null);
+  lo.value = String(r[0]);
+  hi.value = String(r[1]);
+  const st = $('#styleState');
+  if (st) st.textContent = (allowActs(null) ? '带描写' : '纯对话') + ' · ' + bubRangeText(null);
+}
+function readBubRange(changed) {
+  const lo = $('#bubMin'), hi = $('#bubMax');
+  if (!lo || !hi) return;
+  let a = Number(lo.value) || 1, b = Number(hi.value) || a;
+  /* 最少大于最多时，以刚改的那一个为准，把另一个推过去 */
+  if (a > b) { if (changed === 'max') a = b; else b = a; }
+  RolePrefs.bubMin = a;
+  RolePrefs.bubMax = b;
+}
+
 function drawSettings() {
   $('#pgRoleSet').dataset.roleId = Chat.cur;
   $('#roleSettingsTitle').textContent = (Roles.active ? Roles.active.name : '') + ' · 私人设置';
@@ -5213,8 +6426,10 @@ function drawSettings() {
   set('#visionModel', AI.visionModel);
   set('#visionQ', AI.visionQuality || 'high');
   set('#apiStreamMode', AI.streamMode || 'auto');
+  drawStreamState();
   set('#rpTemp', String(RolePrefs.temp || 0.95));
-  set('#rpMode', RolePrefs.rpMode || 'immersive');
+  const ra = $('#rpActs'); if (ra) ra.checked = (RolePrefs.rpMode || 'immersive') === 'immersive';
+  drawBubRange();
   set('#wardrobeShare', RolePrefs.wardrobeShare || 'all');
   set('#memRounds', String(RolePrefs.memRounds || 40));
   set('#memAuto', String(RolePrefs.memAuto == null ? 20 : RolePrefs.memAuto));
@@ -5247,10 +6462,17 @@ function drawSettings() {
   set('#meNameInput', Me.name);
   set('#mePersona', Me.persona);
   set('#meBubble', Me.bubble || '#ff7597');
+  set('#meBubbleAlpha', String(meBubbleAlpha()));
+  const mbav = $('#meBubbleAlphaVal'); if (mbav) mbav.textContent = meBubbleAlpha() + '%';
   const ma = $('#meAvatar'); if (ma) ma.src = Me.avatar || defaultAvatar(Me.name || '我', '#4a2b38');
   const mn = $('#meName'); if (mn) mn.textContent = Me.name || '未设置';
 
   drawRoleList();
+  /* 天气与时间 / 角色陪伴：角色增删后下拉框要跟着变 */
+  Weather.syncForm();
+  Weather.render();
+  Buddy.syncForm();
+  Buddy.refresh();
 }
 
 function drawRoleList() {
@@ -5665,7 +6887,25 @@ function bindSettings() {
   bindField('#visionQ', 'visionQuality');
   bindField('#apiStreamMode', 'streamMode');
   bindField('#rpTemp', 'temp', true);
-  bindField('#rpMode', 'rpMode');
+  /* 角色设置：描写开关 / 每次说几句（都是这位角色私有的） */
+  const ra = $('#rpActs');
+  if (ra) ra.addEventListener('change', async () => {
+    if (Chat.switching || Chat.saving) return;
+    RolePrefs.rpMode = ra.checked ? 'immersive' : 'plain';
+    await Roles.save();
+    drawSettings();
+    if (chatView === 'room') drawMsgs();
+  });
+  ['#bubMin', '#bubMax'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('change', async () => {
+      if (Chat.switching || Chat.saving) return;
+      readBubRange(id === '#bubMax' ? 'max' : 'min');
+      await Roles.save();
+      drawSettings();
+    });
+  });
   bindField('#wardrobeShare', 'wardrobeShare');
   bindField('#memRounds', 'memRounds', true);
   bindField('#memAuto', 'memAuto', true);
@@ -5754,6 +6994,24 @@ function bindSettings() {
   bindMe('#meNameInput', 'name');
   bindMe('#mePersona', 'persona');
   bindMe('#meBubble', 'bubble');
+
+  const mba = $('#meBubbleAlpha');
+  if (mba) {
+    const showAlpha = () => { const o = $('#meBubbleAlphaVal'); if (o) o.textContent = mba.value + '%'; };
+    mba.addEventListener('input', () => {
+      if (Chat.switching || Chat.saving) return;
+      Me.bubbleAlpha = Number(mba.value);
+      showAlpha();
+      if (chatView === 'room') drawMsgs();
+    });
+    mba.addEventListener('change', async () => {
+      if (Chat.switching || Chat.saving) return;
+      Me.bubbleAlpha = Number(mba.value);
+      showAlpha();
+      await saveMe();
+      drawMsgs();
+    });
+  }
 
   /* 角色 */
   const bar = $('#btnAddRole');
@@ -6099,7 +7357,8 @@ function applyChatLook() {
 }
 
 /* ---------- 消息渲染 ---------- */
-function drawMsgs() {
+/* hideLast：先藏起最后几条（逐条冒出来时用） */
+function drawMsgs(hideLast) {
   const box = $('#msgs');
   if (!box) return;
   box.innerHTML = '';
@@ -6108,12 +7367,15 @@ function drawMsgs() {
 
   if (!Chat.msgs.length) {
     const greet = role.greeting || '（还没聊过。说句话开始吧）';
-    box.appendChild(buildMsgEl({ role: 'ai', text: greet, ts: 0 }, role, -1));
+    splitBubbles(stripActs(greet, role) || greet).forEach((p, k) => box.appendChild(buildMsgEl({ role: 'ai', text: p, ts: 0 }, role, -1, k > 0)));
     return;
   }
 
-  let lastTs = 0;
-  Chat.msgs.forEach((m, i) => {
+  const list = hideLast > 0 ? Chat.msgs.slice(0, Math.max(0, Chat.msgs.length - hideLast)) : Chat.msgs;
+  const now = Date.now();
+  let lastTs = 0, prev = '';
+  list.forEach((m, i) => {
+    let gap = false;
     if (m.ts && m.ts - lastTs > 300000) {
       const t = document.createElement('div');
       t.className = 'ts';
@@ -6122,14 +7384,78 @@ function drawMsgs() {
         + String(d0.getHours()).padStart(2, '0') + ':' + String(d0.getMinutes()).padStart(2, '0');
       box.appendChild(t);
       lastTs = m.ts;
+      gap = true;
     }
-    box.appendChild(buildMsgEl(m, role, i));
+    /* 早就在的消息重画时不再播入场动画，免得整屏一闪 */
+    const still = !!(m.ts && now - m.ts > 3000);
+    const same = !gap && prev === m.role && m.role !== 'sys';
+    if (m.role === 'ai' && !m.look) {
+      /* 新记录本来就是一条一个气泡；旧记录里带换行的一大段按行拆开显示 */
+      const pieces = splitBubbles(stripActs(m.text, role));
+      (pieces.length ? pieces : [m.text || '']).forEach((p, k) => {
+        const el = buildMsgEl(Object.assign({}, m, { text: p }), role, i, same || k > 0);
+        if (still) el.classList.add('still');
+        box.appendChild(el);
+      });
+    } else {
+      const el = buildMsgEl(m, role, i, same);
+      if (still) el.classList.add('still');
+      box.appendChild(el);
+    }
+    prev = m.role;
     if (m.ts) lastTs = m.ts;
   });
 }
 
-function buildMsgEl(m, role, idx) {
+/* 把一段话拆成多个气泡：完全按他自己换行分的「条」来，不按字数硬切。
+ * opt.max：超过就把最短的相邻两条合并，直到不超；
+ * opt.min：不够时才把最长那条在句号/问号/感叹号处一分为二（只在句子边界切）。
+ * 单独一行只有 *动作* 的，并到下一条前面。 */
+function splitBubbles(text, opt) {
+  opt = opt || {};
+  const max = Math.max(1, opt.max || BUB_LIMIT);
+  const min = Math.max(1, Math.min(opt.min || 1, max));
+  let out = String(text || '').replace(/\r\n?/g, '\n').split(/\n+/)
+    .map(s => s.trim()
+      .replace(/^(?:\d{1,2}[.、)）]|[①②③④⑤⑥⑦⑧⑨⑩]|[-·•])\s*/, '')
+      .replace(/^第[一二三四五六七八九十\d]+条[:：]\s*/, ''))
+    .filter(Boolean);
+  for (let i = 0; i < out.length - 1; i++) {
+    if (/^\*[^*]+\*$/.test(out[i])) { out.splice(i, 2, out[i] + ' ' + out[i + 1]); i--; }
+  }
+  const glue = (a, b) => a + (/\*$/.test(a) ? ' ' : (/[。！？!?…~～，,、；;：:」』”"’）)]$/.test(a) ? '' : '，')) + b;
+  while (out.length > max) {
+    let k = 0, best = Infinity;
+    for (let i = 0; i < out.length - 1; i++) {
+      const n = out[i].length + out[i + 1].length;
+      if (n < best) { best = n; k = i; }
+    }
+    out.splice(k, 2, glue(out[k], out[k + 1]));
+  }
+  while (out.length < min) {
+    let k = -1, cut = -1, best = 0;
+    out.forEach((s, i) => {
+      if (s.length <= best) return;
+      const pos = [];
+      const re = /[。！？!?…~～]+[」』”"’）)]*/g;
+      let m;
+      while ((m = re.exec(s))) { const e = m.index + m[0].length; if (e < s.length) pos.push(e); }
+      if (!pos.length) return;
+      const mid = s.length / 2;
+      const p = pos.reduce((a, b) => (Math.abs(b - mid) < Math.abs(a - mid) ? b : a));
+      best = s.length; k = i; cut = p;
+    });
+    if (k < 0) break;
+    const s = out[k];
+    out.splice(k, 1, s.slice(0, cut).trim(), s.slice(cut).trim());
+    out = out.filter(Boolean);
+  }
+  return out;
+}
+
+function buildMsgEl(m, role, idx, cont) {
   const wrap = document.createElement('div');
+  if (idx >= 0) wrap.dataset.i = String(idx);
 
   if (m.role === 'sys') {
     wrap.className = 'msg sys';
@@ -6141,7 +7467,8 @@ function buildMsgEl(m, role, idx) {
   }
 
   const mine = m.role === 'user';
-  wrap.className = 'msg' + (mine ? ' me' : '');
+  /* cont：同一个人连着发的后续气泡，不重复头像和名字 */
+  wrap.className = 'msg' + (mine ? ' me' : '') + (cont ? ' cont' : '');
 
   const av = document.createElement('img');
   av.className = 'av';
@@ -6154,7 +7481,7 @@ function buildMsgEl(m, role, idx) {
   bub.className = 'bub';
   /* 气泡底色 + 文字色都可自定义，避免出现「黑底黑字」 */
   if (mine) {
-    if (Me.bubble) bub.style.background = hexA(Me.bubble, .17);
+    if (Me.bubble) bub.style.background = hexA(Me.bubble, meBubbleAlpha() / 100);
     if (Look.meText) bub.style.color = Look.meText;
   } else {
     if (role.bubble) bub.style.background = role.bubble;
@@ -6162,7 +7489,7 @@ function buildMsgEl(m, role, idx) {
   }
 
   let html = '';
-  if (!mine) html += '<div class="nm">' + escHtml(role.name || '他') + '</div>';
+  if (!mine && !cont) html += '<div class="nm">' + escHtml(role.name || '他') + '</div>';
   html += renderRich(m.text || '');
   bub.innerHTML = html;
 
@@ -6218,6 +7545,10 @@ function buildLookCardEl(look) {
 function escHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+function meBubbleAlpha() {
+  const v = Number(Me && Me.bubbleAlpha);
+  return Number.isFinite(v) && v > 0 ? Math.min(100, Math.max(10, v)) : 100;
+}
 function hexA(hex, a) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
   if (!m) return hex;
@@ -6235,12 +7566,13 @@ function scrollMsgsToEnd() {
 }
 
 /* ---------- 打字指示 ---------- */
-function showTyping() {
+function showTyping(cont) {
   const box = $('#msgs');
   if (!box) return null;
+  removeTyping();
   const role = Roles.byId(Chat.cur);
   const wrap = document.createElement('div');
-  wrap.className = 'msg';
+  wrap.className = 'msg' + (cont ? ' cont' : '');
   wrap.id = 'typingRow';
   const av = document.createElement('img');
   av.className = 'av';
@@ -6269,17 +7601,15 @@ function buildChatSystem(role) {
   parts.push('你正在进行沉浸式角色扮演。你就是「' + cn + '」，'
     + '你不是 AI、不是助手，不要以任何方式暴露自己是程序。');
 
-  if ((RolePrefs.rpMode || 'immersive') === 'immersive') {
-    parts.push('可以用 *动作* 的形式穿插神态和动作描写，但别写成小说，'
-      + '一条消息里最多一两处，重点还是对话。');
-  } else {
-    parts.push('只输出说出口的话。不要任何括号、星号、动作描写、神态描写、旁白。');
-  }
+  parts.push(actsRule(role));
 
   if (role.prompt) parts.push('【你的人设】\n' + applyVars(role.prompt, role));
   if (Me.name || Me.persona) {
     parts.push('【关于' + un + '】\n' + (Me.persona ? applyVars(Me.persona, role) : '（她没多说）'));
   }
+
+  /* 此刻的日期时间 / 季节 / 当地天气：默认就让他知道，自然融进话里 */
+  parts.push(Weather.envBlock());
 
   const wbTxt = pickWorldBook();
   if (wbTxt) parts.push('【你知道的设定】\n' + wbTxt);
@@ -6300,6 +7630,8 @@ function buildChatSystem(role) {
   }
 
   parts.push('【怎么说话】\n'
+    + '· ' + msgFormatRule(role) + '\n'
+    + '· ' + actsRule(role) + '\n'
     + '· 长短随意，像真人发消息，别每条都一样长\n'
     + '· 不要总结、不要说教、不要问「还有什么可以帮你」\n'
     + '· 不要复述她说过的话\n'
@@ -6423,33 +7755,99 @@ async function runAiReply() {
   if (sendBtn) sendBtn.disabled = true;
   if (replyBtn) { replyBtn.disabled = true; replyBtn.classList.add('busy'); }
 
-  const bub = showTyping();
+  let bub = showTyping();
   let acc = '';
+  /* 流式时：写完一行就变成一个独立气泡，正在写的那行留在「正在输入」的气泡里 */
+  let deltas = 0, shown = 0;
+  const live = document.createElement('div');
+  live.style.display = 'contents';
+  const tr0 = document.getElementById('typingRow');
+  if (tr0 && tr0.parentNode) tr0.parentNode.insertBefore(live, tr0);
+  const dots = '<div class="typing"><i></i><i></i><i></i></div>';
+  const range = bubRange(role);
+  const paint = (full) => {
+    const nl = full.lastIndexOf('\n');
+    const rawDone = nl >= 0 ? full.slice(0, nl).split('\n').map(s => s.trim()).filter(Boolean) : [];
+    let tail = (nl >= 0 ? full.slice(nl + 1) : full).trim();
+    /* 最后一行只有 *动作* 时，等它后面那句写完再一起出 */
+    if (rawDone.length && /^\*[^*]+\*$/.test(rawDone[rawDone.length - 1])) tail = rawDone.pop() + ' ' + tail;
+    let done = splitBubbles(stripActs(rawDone.join('\n'), role));
+    /* 到了上限：前 (上限-1) 条先出，剩下的都并进最后一个气泡 */
+    if (done.length > range[1] - 1) {
+      tail = done.slice(range[1] - 1).join(' ') + (tail ? ' ' + tail : '');
+      done = done.slice(0, range[1] - 1);
+    }
+    tail = stripActs(tail, role);
+    /* 不允许描写时，还没写完的 *… 或 （… 也先不露出来 */
+    if (!allowActs(role)) tail = tail.replace(/[*（(][^*）)]*$/, '').trim();
+    if (done.length < shown) { live.innerHTML = ''; shown = 0; }
+    for (let k = shown; k < done.length; k++) {
+      live.appendChild(buildMsgEl({ role: 'ai', text: done[k], ts: 0 }, role, -1, k > 0));
+    }
+    shown = done.length;
+    const tr = document.getElementById('typingRow');
+    if (tr) tr.classList.toggle('cont', shown > 0);
+    if (bub) {
+      bub.innerHTML = (shown ? '' : '<div class="nm">' + escHtml(role.name || '他') + '</div>')
+        + (tail ? renderRich(tail) : dots);
+    }
+    scrollMsgsToEnd();
+  };
   try {
+    /* 天气过期就顺手刷新一下（最多等 4 秒，拿不到就用旧的，不挡聊天） */
+    await Weather.ensure(4000);
     const messages = [{ role: 'system', content: buildChatSystem(role) }].concat(buildChatHistory());
     const txt = await aiRequest(messages, {
       temp: Number(RolePrefs.temp || 0.95),
       onDelta: (piece, full) => {
         acc = full;
-        if (bub) {
-          bub.innerHTML = '<div class="nm">' + escHtml(role.name || '他') + '</div>' + renderRich(full);
-          scrollMsgsToEnd();
-        }
+        deltas++;
+        /* 第一块先不画：非流式接口只会回调这一次，留给下面逐条冒出来 */
+        if (deltas > 1) paint(full);
       }
     });
     removeTyping();
+    if (live.parentNode) live.parentNode.removeChild(live);
     const finalText = (txt || acc || '').trim();
-    if (!finalText) {
-      Chat.msgs.push({ role: 'sys', text: '（他没说话，可能是模型返回空。再试一次？）', ts: Date.now() });
+    /* 按他自己分的条拆气泡；超过上限合并，不够下限才在句号处补切 */
+    const parts = splitBubbles(stripActs(finalText, role), { min: range[0], max: range[1] });
+    if (!parts.length) {
+      Chat.msgs.push({ role: 'sys', ts: Date.now(), text: finalText
+        ? '（他这次只写了动作描写，按「不允许描写」的设置被过滤掉了。再试一次？）'
+        : '（他没说话，可能是模型返回空。再试一次？）' });
     } else {
-      Chat.msgs.push({ role: 'ai', text: finalText, ts: Date.now() });
+      /* 一个气泡存一条，长按也能单独删 */
+      const now = Date.now();
+      parts.forEach((p, k) => Chat.msgs.push({ role: 'ai', text: p, ts: now + k }));
     }
     await Chat.persist();
-    drawMsgs();
-    scrollMsgsToEnd();
+    if (deltas > 1 || parts.length < 2) {
+      drawMsgs();
+      scrollMsgsToEnd();
+    } else {
+      /* 一次性拿到整段：像对方在打字一样一条一条冒出来 */
+      const box = $('#msgs');
+      const base = Chat.msgs.length - parts.length;
+      drawMsgs(parts.length - 1);
+      scrollMsgsToEnd();
+      for (let k = 1; k < parts.length; k++) {
+        if (Chat.cur !== role.id) break;
+        showTyping(true);
+        scrollMsgsToEnd();
+        await sleep(Math.max(450, Math.min(1600, 280 + parts[k].length * 40)));
+        removeTyping();
+        if (Chat.cur !== role.id || !box) break;
+        /* 中途被整屏重画过（切页回来 / 删了消息）就不再补，免得重复 */
+        if (Chat.msgs.length !== base + parts.length || box.querySelector('[data-i="' + (base + k) + '"]')) break;
+        const m = Chat.msgs[base + k];
+        if (m) box.appendChild(buildMsgEl(m, role, base + k, true));
+        scrollMsgsToEnd();
+      }
+    }
     maybeAutoSummarize();
   } catch (e) {
     removeTyping();
+    if (live.parentNode) live.parentNode.removeChild(live);
     console.error('聊天失败', e);
     Chat.msgs.push({
       role: 'sys',
@@ -6786,6 +8184,17 @@ async function boot() {
     if (cfg.fitMode === 'vision') $('#modeVision').checked = true;
     else $('#modeText').checked = true;
     if (cfg.visionCount) $('#visionCount').value = cfg.visionCount;
+    if (cfg.fitScope === 'picked') $('#scopePicked').checked = true;
+    else $('#scopeAll').checked = true;
+    await Weather.load();
+    /* 上一版在试衣间里填过的城市 / 开关，搬到设置里来 */
+    if (!all['wx:cfg'] && (cfg.wxCity || cfg.useWeather === false)) {
+      if (cfg.wxCity) Weather.cfg.city = String(cfg.wxCity);
+      if (cfg.useWeather === false) Weather.cfg.on = false;
+      await Weather.saveCfg();
+    }
+    Weather.syncForm();
+    Weather.render();
 
     /* 接口配置 */
     const savedAI = dec(all['ai:cfg'], null);
@@ -6828,6 +8237,7 @@ async function boot() {
     await Chat.open(Roles.activeId);
     await Roles.save();
     await saveCfg();
+    await Buddy.load();
   } catch (e) {
     console.error('读取存档失败', e);
     toast('读取存档失败，这次以空衣橱启动（已有数据没有被删）', { duration: 5000 });
