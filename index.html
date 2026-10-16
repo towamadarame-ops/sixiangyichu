@@ -31,7 +31,13 @@
     color:var(--text-main)}
 
   /* 独立 PWA：直接用标准 env(safe-area-inset-*)，适配刘海屏/小白条 */
-  #app{position:relative;width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;
+  /* overflow 必须用 clip 而不是 hidden：
+     收起的抽屉是 position:absolute + translateY(102%)，会算进「可滚动溢出区」。
+     hidden 仍然是个滚动容器（只是不让手动滚），键盘弹出时浏览器把输入框
+     scrollIntoView 就会把 #app 自己滚上去，把收起的抽屉拽进画面且滚不回来。
+     clip 根本不建立滚动容器，彻底断掉这条路。hidden 留着给不认识 clip 的老浏览器兜底。 */
+  #app{position:relative;width:100%;height:100%;display:flex;flex-direction:column;
+    overflow:hidden;overflow:clip;
     padding-top:env(safe-area-inset-top,0px);
     padding-bottom:env(safe-area-inset-bottom,0px);
     padding-left:env(safe-area-inset-left,0px);
@@ -133,7 +139,7 @@
     background:var(--card-bg);border:1px solid var(--card-border);
     backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
     box-shadow:inset 0 0 20px rgba(0,0,0,.5),0 8px 32px rgba(0,0,0,.4);
-    display:flex;flex-direction:column;overflow:hidden}
+    display:flex;flex-direction:column;overflow:hidden;overflow:clip}
   .scroll{position:relative;z-index:2;flex:1;min-height:0;overflow-y:auto;
     -webkit-overflow-scrolling:touch;padding:14px}
   .page{display:none}
@@ -283,6 +289,18 @@
   .buddy.talk .buddy-bub{opacity:1;transform:none;visibility:visible}
   .buddy-nm{font-size:10px;color:var(--pink);margin:0 0 3px 4px;letter-spacing:.3px;
     text-shadow:0 1px 4px rgba(0,0,0,.8)}
+  /* 正在看哪件衣服：缩略图 + 名字，挂在台词气泡上方 */
+  .buddy-focus{display:none;align-items:center;gap:8px;max-width:100%;pointer-events:none;
+    padding:5px 10px 5px 5px;border-radius:13px;background:#1d1a20;
+    border:1px solid rgba(255,117,151,.45);box-shadow:0 6px 20px rgba(0,0,0,.5)}
+  .buddy-focus.on{display:flex}
+  .buddy-focus img{width:36px;height:46px;flex:0 0 auto;border-radius:9px;object-fit:cover;
+    background:#15151a;border:1px solid rgba(255,255,255,.12)}
+  .buddy-focus .ft{min-width:0;font-size:11.5px;line-height:1.45;color:#f2eef0}
+  .buddy-focus b{display:block;font-size:9.5px;font-weight:600;color:var(--pink);
+    margin-bottom:1px;letter-spacing:.3px}
+  .buddy-focus em{font-style:normal;display:block;max-width:168px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .buddy-txt{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
   .buddy-line{position:relative;max-width:100%;padding:8px 12px 9px;border-radius:15px;background:#1d1a20;
     border:1px solid rgba(255,117,151,.45);box-shadow:0 6px 20px rgba(0,0,0,.5);
@@ -296,8 +314,13 @@
   /* 抽屉里的同款台词（抽屉会盖住悬浮气泡） */
   .buddy-inline{display:flex;align-items:flex-start;gap:8px;margin-top:8px;padding:8px 10px;border-radius:12px;
     background:#1d1a20;border:1px solid rgba(255,117,151,.35)}
-  .buddy-inline img{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:0 0 auto;
+  .buddy-inline img.who{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:0 0 auto;
     border:1px solid rgba(255,117,151,.6)}
+  /* 这句说的是哪张照片 */
+  .buddy-inline-pic{flex:0 0 auto;width:40px;text-align:center}
+  .buddy-inline-pic img{width:40px;height:52px;border-radius:8px;object-fit:cover;display:block;
+    background:#15151a;border:1px solid rgba(255,255,255,.14)}
+  .buddy-inline-pic i{display:block;margin-top:3px;font-style:normal;font-size:9px;color:var(--pink)}
   .buddy-inline span{font-size:12.5px;line-height:1.6;color:#f2eef0;word-break:break-word}
   .buddy-inline b{display:block;font-size:10px;font-weight:500;color:var(--pink);margin-bottom:1px}
   .buddy-inline i.act{color:#a8a3a8;font-style:italic}
@@ -351,6 +374,8 @@
     padding:8px 18px calc(env(safe-area-inset-bottom,0px) + 18px);
     transform:translateY(102%);transition:transform .3s cubic-bezier(.22,.8,.3,1)}
   .drawer.open{transform:translateY(0)}
+  /* 收起的抽屉不接任何点击（万一被外壳滚动顶进画面，也不会挡住底下的按钮） */
+  .drawer:not(.open){pointer-events:none}
   .grip{width:42px;height:4px;border-radius:3px;background:rgba(255,255,255,.2);margin:6px auto 12px}
   .drawer h2{font-size:16px;color:#fff;margin-bottom:5px}
   .hint{font-size:11.5px;color:var(--text-sub);margin-bottom:14px;line-height:1.7}
@@ -1495,6 +1520,10 @@
 
   <!-- 角色陪伴：小头像 + 台词气泡 -->
   <div class="buddy" id="buddy" aria-live="polite">
+    <div class="buddy-focus" id="buddyFocus">
+      <img id="buddyFocusImg" alt="" src="">
+      <span class="ft"><b id="buddyFocusTip">正在看</b><em id="buddyFocusName"></em></span>
+    </div>
     <div class="buddy-bub" id="buddyBub">
       <div class="buddy-nm" id="buddyName"></div>
       <div class="buddy-txt" id="buddyTxt"></div>
@@ -3293,12 +3322,18 @@ async function recognizeImage(rawDataUrl, quality, onWait) {
 }
 
 /* 抽屉开着时陪伴气泡被盖住，台词同时显示在抽屉里的状态区 */
-function buddyInlineHtml(say, who) {
+function buddyInlineHtml(say, who, thumb, label) {
   if (!say) return '';
   const r = who || Buddy.role();
   const av = (r && r.avatar) || defaultAvatar(r ? r.name : '他', '#3a2f38');
   const lines = Buddy.pieces(say).map(p => '<em>' + Buddy.html(p) + '</em>').join('');
-  return '<div class="buddy-inline"><img src="' + av.replace(/"/g, '&quot;') + '" alt="">'
+  /* 批量识图时一张张过，带上这句说的是哪张照片 */
+  const pic = thumb
+    ? '<div class="buddy-inline-pic"><img src="' + String(thumb).replace(/"/g, '&quot;') + '" alt="">'
+      + (label ? '<i>' + escHtml(label) + '</i>' : '') + '</div>'
+    : '';
+  return '<div class="buddy-inline">' + pic
+    + '<img class="who" src="' + av.replace(/"/g, '&quot;') + '" alt="">'
     + '<span><b>' + escHtml((r && r.name) || '他') + '</b>' + lines + '</span></div>';
 }
 
@@ -3369,8 +3404,11 @@ async function autoTag() {
     if (r.added) parts.push('新建 ' + r.added + ' 个');
     if (data.name) parts.push('名字→' + data.name);
     statusEl.innerHTML = escHtml('✅ ' + (parts.length ? parts.join('，') : '识别完成') + '。可以修改后再保存。')
-      + buddyInlineHtml(say, who);
-    if (say) Buddy.say(say, { now: true });
+      + buddyInlineHtml(say, who, S.pending[0] && S.pending[0].thumb);
+    if (say) {
+      Buddy.focus({ thumb: S.pending[0] && S.pending[0].thumb, name: data.name || '' }, '刚看了');
+      Buddy.say(say, { now: true });
+    }
   } catch (e) {
     console.error('autoTag', e);
     const msg = (e && e.message) || String(e);
@@ -3420,7 +3458,7 @@ async function autoTagAll() {
    * 就算停了，停的也只是「识图」，剩下的照片照常无标签入柜，一张都不会丢。 */
   let stopReason = '';
   /* 他对上一张说的话，跟着进度一起显示 */
-  let lastSay = '', lastWho = null;
+  let lastSay = '', lastWho = null, lastThumb = '', lastLabel = '';
 
   try {
     for (let i = 0; i < n; i++) {
@@ -3428,7 +3466,8 @@ async function autoTagAll() {
       const head = '第 ' + (i + 1) + ' / ' + n + ' 张';
       if (!stopReason) {
         statusEl.innerHTML = escHtml('正在识别 ' + head + '…'
-          + (failed ? '（已有 ' + failed + ' 张没认出来）' : '')) + buddyInlineHtml(lastSay, lastWho);
+          + (failed ? '（已有 ' + failed + ' 张没认出来）' : ''))
+          + buddyInlineHtml(lastSay, lastWho, lastThumb, lastLabel);
       } else {
         statusEl.textContent = '识图已停止，正在把剩下的照片直接入柜（' + head + '）…';
       }
@@ -3438,7 +3477,12 @@ async function autoTagAll() {
         try {
           const r = await recognizeImage(im.full || im.thumb, quality);
           data = r.data;
-          if (r.say) { lastSay = r.say; lastWho = r.who; Buddy.say(r.say, { now: true }); }
+          if (r.say) {
+            lastSay = r.say; lastWho = r.who;
+            lastThumb = im.thumb; lastLabel = '第 ' + (i + 1) + ' 张';
+            Buddy.focus({ thumb: im.thumb, name: (r.data && r.data.name) || '' }, '刚看了 ' + (i + 1) + '/' + n);
+            Buddy.say(r.say, { now: true });
+          }
         } catch (e) {
           console.warn('第 ' + (i + 1) + ' 张识图失败', e);
           failed++;
@@ -4700,6 +4744,7 @@ const Buddy = {
   lastAt: 0,
   thinking: false,
   greeted: false,
+  focusItem: null,
 
   role() {
     /* 试衣间里陪着你的就是正在帮你挑 / 点评的那位，台词口吻和头像才对得上 */
@@ -4750,11 +4795,34 @@ const Buddy = {
     const r = this.role();
     const show = this.enabled() && this.pageOk();
     el.classList.toggle('on', show);
-    if (!show) { this.hide(); return; }
+    if (!show) {
+      this.hide();
+      const fb = $('#buddyFocus');
+      if (fb) fb.classList.remove('on');
+      return;
+    }
     const av = $('#buddyAv');
     const src = (r && r.avatar) || defaultAvatar(r ? r.name : '他', '#3a2f38');
     if (av && av.getAttribute('src') !== src) av.src = src;
     $('#buddyName').textContent = (r && r.name) || '他';
+  },
+
+  /* 他正在看哪件衣服：传衣服对象显示缩略图 + 名字，传 null 收起。
+   * 一次看好几件时，用这个对上「他这句说的是哪件」。 */
+  focus(it, tip) {
+    const box = $('#buddyFocus');
+    this.focusItem = it || null;
+    if (!box) return;
+    if (!it || !this.enabled() || !this.pageOk()) { box.classList.remove('on'); return; }
+    this.refresh();
+    const img = $('#buddyFocusImg');
+    const src = it.thumb || defaultAvatar(it.name || '衣', '#2a2a30');
+    if (img && img.getAttribute('src') !== src) img.src = src;
+    const tp = $('#buddyFocusTip');
+    if (tp) tp.textContent = tip || '正在看';
+    const nm = $('#buddyFocusName');
+    if (nm) nm.textContent = it.name || it.category || '这件';
+    box.classList.add('on');
   },
 
   clean(text) {
@@ -4816,6 +4884,10 @@ const Buddy = {
     clearTimeout(this.timer);
     const el = $('#buddy');
     if (el) el.classList.remove('talk');
+    /* 台词收了，「正在看这件」也跟着收 */
+    const fb = $('#buddyFocus');
+    if (fb) fb.classList.remove('on');
+    this.focusItem = null;
   },
 
   /* opt.now：插队立即说（批量识图这种连续进度用）；否则排队按顺序说 */
@@ -4995,7 +5067,10 @@ async function lookAtItems(list, t) {
     const it = list[i];
     const key = it.id + ':' + String(it.thumb || '').length;
     if (VISION_CACHE[key]) { notes[it.id] = VISION_CACHE[key]; looked++; continue; }
-    t.update('正在看第 ' + (i + 1) + '/' + list.length + ' 张图…');
+    const nm = it.name || it.category || '这件';
+    t.update('正在看第 ' + (i + 1) + '/' + list.length + ' 张：' + cut(nm, 14));
+    /* 一次看好几件时，把他正在看的那件显示出来，才知道这句说的是哪件 */
+    Buddy.focus(it, '正在看 ' + (i + 1) + '/' + list.length);
     const full = await Store.get('im:' + it.id);
     try {
       const r = await visionSafe(prompt, full || it.thumb, 'auto');
@@ -5006,23 +5081,26 @@ async function lookAtItems(list, t) {
         VISION_CACHE[key] = md ? md[1].trim() : raw.replace(/\n?台词[:：][^\n]*/, '').trim();
         notes[it.id] = VISION_CACHE[key];
         looked++;
-        if (ml) Buddy.say(ml[1], { now: true });
+        if (ml) { Buddy.focus(it, '刚看了'); Buddy.say(ml[1], { now: true }); }
       }
     } catch (e) {
       console.warn('识图失败，跳过这张', e);
       const msg = (e && e.message) || String(e);
       if (VISION_STOP.indexOf(msg) >= 0) {
         t.update('识图用不了（' + humanErr(e) + '），改为按标签和备注搭配…');
+        Buddy.focus(null);
         await sleep(1200);
         break;
       }
       if (msg === 'rateLimited') {
         t.update('接口限速，已看 ' + looked + ' 张，剩下的按标签搭…');
+        Buddy.focus(null);
         await sleep(1200);
         break;
       }
     }
   }
+  Buddy.focus(null);
   return { notes, looked };
 }
 
@@ -5285,6 +5363,7 @@ async function askChar() {
   } finally {
     btn.disabled = false;
     Buddy.stopThink();
+    Buddy.focus(null);
   }
 }
 
@@ -6309,19 +6388,41 @@ function bind() {
   $('#lb').onclick = (e) => { if (e.target.id === 'lb' || e.target.id === 'lbImg') closeLb(); };
   $$('.nav button').forEach(b => { b.onclick = () => go(b.dataset.page); });
 
-  /* 键盘：独立 PWA 里用 visualViewport，把聚焦的输入框顶到可见区 */
+  /* 键盘弹出 / 收起时的兜底：
+     #app 和 .stage 永远不该被滚动。浏览器为了露出输入框，会去滚「任何能滚的祖先」，
+     一旦把 #app 滚上去，收起的抽屉就会被拽进画面，而且用户手动滚不回来（overflow 不给手滚）。
+     这里不管谁滚的，一律按回 0。 */
+  const pinShell = () => {
+    ['#app', '.stage'].forEach(sel => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      if (el.scrollTop) el.scrollTop = 0;
+      if (el.scrollLeft) el.scrollLeft = 0;
+    });
+  };
+  ['#app', '.stage'].forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el) el.addEventListener('scroll', pinShell, { passive: true });
+  });
+  window.addEventListener('resize', pinShell);
+
+  /* 键盘：独立 PWA 里用 visualViewport，把聚焦的输入框顶到可见区。
+     只滚「真正的滚动容器」（抽屉 / 页面滚动层 / 消息流），
+     绝不用 el.scrollIntoView()——那个会连 #app 一起滚。 */
   if (window.visualViewport) {
-    let lastH = window.visualViewport.height;
-    window.visualViewport.addEventListener('resize', () => {
-      const h = window.visualViewport.height;
+    const vv = window.visualViewport;
+    let lastH = vv.height;
+    vv.addEventListener('resize', () => {
+      const h = vv.height;
       const kbUp = h < lastH - 80;
       lastH = h;
+      pinShell();
       if (!kbUp) return;
       const el = document.activeElement;
-      if (el && el.scrollIntoView && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-        setTimeout(() => { try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }, 60);
-      }
+      if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA')) return;
+      setTimeout(() => { nudgeIntoView(el); pinShell(); }, 60);
     });
+    vv.addEventListener('scroll', pinShell);
   }
 
   setupSettingsPages();
@@ -7563,6 +7664,35 @@ function renderRich(text) {
 function scrollMsgsToEnd() {
   const box = $('#msgs');
   if (box) requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
+}
+
+/* 把 el 挪进可见区（键盘挡住时用）。
+ * 自己算偏移量 + 只动最近的那个「能滚的容器」，
+ * 不用 scrollIntoView——它会把 #app、.stage 这些只是 overflow 裁切的外壳一起滚，
+ * 结果把收起的抽屉拽进画面，而且用户滚不回来。 */
+function nudgeIntoView(el) {
+  const vv = window.visualViewport;
+  if (!el || !vv || !el.getBoundingClientRect) return;
+  const box = el.getBoundingClientRect();
+  if (!box.height && !box.width) return;
+  const top = vv.offsetTop + 12;
+  const bottom = vv.offsetTop + vv.height - 12;
+  let delta = 0;
+  if (box.bottom > bottom) delta = box.bottom - bottom;
+  else if (box.top < top) delta = box.top - top;
+  if (!delta) return;
+  /* 聊天输入框：它贴在消息流下面，把消息流拉到底就行 */
+  if (el.id === 'chatInput') { scrollMsgsToEnd(); return; }
+  let p = el.parentElement;
+  while (p && p !== document.body) {
+    let oy = '';
+    try { oy = getComputedStyle(p).overflowY; } catch (e) { oy = ''; }
+    if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight + 1) {
+      p.scrollTop += delta;
+      return;
+    }
+    p = p.parentElement;
+  }
 }
 
 /* ---------- 打字指示 ---------- */
