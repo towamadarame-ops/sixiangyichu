@@ -277,11 +277,23 @@
   .buddy{position:absolute;left:14px;bottom:150px;z-index:26;display:none;flex-direction:column;
     align-items:flex-start;gap:6px;pointer-events:none;max-width:calc(100% - 100px)}
   .buddy.on{display:flex}
-  .buddy-av{width:44px;height:44px;border-radius:50%;object-fit:cover;pointer-events:auto;cursor:pointer;
+  .buddy-av{width:44px;height:44px;border-radius:50%;object-fit:cover;pointer-events:auto;cursor:grab;
     border:1.5px solid rgba(255,117,151,.7);background:#2a2a30;box-shadow:0 4px 16px rgba(0,0,0,.5);
-    opacity:.78;transition:opacity .2s,transform .2s}
+    opacity:.78;transition:opacity .2s,transform .2s;
+    touch-action:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
   .buddy.talk .buddy-av{opacity:1;transform:scale(1.04)}
   .buddy-av:active{transform:scale(.94)}
+  /* 拖动中：跟手，不要过渡动画；气泡让位 */
+  .buddy.dragging{transition:none}
+  .buddy.dragging .buddy-av{cursor:grabbing;opacity:1;transform:scale(1.12);
+    box-shadow:0 8px 26px rgba(255,117,151,.45);transition:none}
+  .buddy.dragging .buddy-bub,.buddy.dragging .buddy-focus{opacity:.25}
+  /* 拖到右半边：气泡改成贴右边展开 */
+  .buddy.right{align-items:flex-end}
+  .buddy.right .buddy-bub{transform-origin:right bottom}
+  .buddy.right .buddy-nm{margin:0 4px 3px 0;text-align:right}
+  .buddy.right .buddy-line{align-self:flex-end}
+  .buddy.right .buddy-line:last-child{border-bottom-left-radius:15px;border-bottom-right-radius:5px}
   /* 气泡区：同一段话拆成几条，像聊天一样一条条往下叠 */
   .buddy-bub{position:relative;pointer-events:auto;cursor:pointer;max-width:270px;
     opacity:0;transform:translateY(6px) scale(.97);transform-origin:left bottom;
@@ -1260,8 +1272,9 @@
                 <label class="wx-switch"><input type="checkbox" id="buddyOn" checked><span>在衣橱 / 试衣间显示他的小头像和台词</span></label>
                 <div class="hint" style="margin:4px 0 0">
                   识图、帮你挑衣服、点评时，他的台词跟着同一次接口一起生成，不额外多花调用。
-                  没调接口的小动作（手动入柜、存搭配、随机抽）用的是本地预设的短句。
-                  点小头像可以重看他刚才说的话，点气泡收起。
+                  没调接口的小动作（手动入柜、存搭配、随机抽）用的是本地预设的短句。<br>
+                  小头像可以<b>按住拖到任意位置</b>（挪到右边时气泡会自动朝左展开，位置会记住）；
+                  <b>单击</b>收起或重看他刚才说的话，<b>双击</b>把他收起来。
                 </div>
               </div>
               <div class="f">
@@ -3539,8 +3552,8 @@ async function autoTagAll() {
     else if (stopReason) msg.push('识图中断（' + humanErr({ message: stopReason }) + '），剩下的已无标签入柜');
     else if (failed) msg.push(failed + ' 张没认出来，已无标签入柜，回头可以手动补或重新识');
     toast(msg.join('，'), { duration: (failed || stopReason) ? 6000 : 4000 });
-    /* 抽屉收起后让他把最后那句再说一遍；没台词就用本地短句 */
-    if (lastSay) Buddy.say(lastSay, { now: true });
+    /* 抽屉收起后把最后那句亮在主界面上；它要是还挂在气泡上就别再说一遍 */
+    if (lastSay) Buddy.resurface(lastSay);
     else Buddy.event('saved');
     /* 配置类失败：直接把设置页推给用户，别让人干瞪眼 */
     if (stopReason === 'noApi' || stopReason === 'noKey' || stopReason === 'noModel' || stopReason === 'noVision') {
@@ -4745,6 +4758,9 @@ const Buddy = {
   thinking: false,
   greeted: false,
   focusItem: null,
+  /* 小头像被拖到哪儿了：存成比例，换屏幕 / 转屏也不会跑到画面外 */
+  pos: null,
+  dragging: false,
 
   role() {
     /* 试衣间里陪着你的就是正在帮你挑 / 点评的那位，台词口吻和头像才对得上 */
@@ -4761,12 +4777,102 @@ const Buddy = {
   async load() {
     try {
       const c = dec(await Store.get('buddy:cfg'), null);
-      if (c && typeof c === 'object') { this.on = c.on !== false; this.who = c.who || 'active'; }
+      if (c && typeof c === 'object') {
+        this.on = c.on !== false;
+        this.who = c.who || 'active';
+        if (c.pos && isFinite(c.pos.lr) && isFinite(c.pos.br)) this.pos = { lr: c.pos.lr, br: c.pos.br };
+      }
     } catch (e) { /* ignore */ }
     this.syncForm();
     this.refresh();
+    this.applyPos();
   },
-  async save() { try { await Store.set('buddy:cfg', enc({ on: this.on, who: this.who })); } catch (e) { /* ignore */ } },
+  async save() {
+    try { await Store.set('buddy:cfg', enc({ on: this.on, who: this.who, pos: this.pos })); }
+    catch (e) { /* ignore */ }
+  },
+
+  /* ---------- 拖动 ---------- */
+  AV: 44,     // 头像直径，和 CSS 里保持一致
+  PAD: 8,     // 离边缘留的空
+  shell() { return $('#app') || document.body; },
+  clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); },
+
+  /* 把比例换算成实际位置并写进 style。
+   * 按「左 + 下」定位：头像钉住不动，气泡只往上长，不会因为多一条台词就整体跳。 */
+  applyPos() {
+    const el = $('#buddy');
+    if (!el || !this.pos) return;
+    const box = this.shell();
+    const W = box.clientWidth || 0, H = box.clientHeight || 0;
+    if (!W || !H) return;
+    const AV = this.AV, PAD = this.PAD;
+    const l = this.clamp(this.pos.lr * (W - AV), PAD, Math.max(PAD, W - AV - PAD));
+    const b = this.clamp(this.pos.br * (H - AV), PAD, Math.max(PAD, H - AV - PAD));
+    /* 落在右半边就改成贴右边，气泡朝左展开，不会顶出屏幕 */
+    const right = (l + AV / 2) > W / 2;
+    el.classList.toggle('right', right);
+    el.style.bottom = Math.round(b) + 'px';
+    if (right) {
+      el.style.left = 'auto';
+      el.style.right = Math.round(W - l - AV) + 'px';
+      el.style.maxWidth = Math.round(Math.max(120, l + AV - PAD)) + 'px';
+    } else {
+      el.style.right = 'auto';
+      el.style.left = Math.round(l) + 'px';
+      el.style.maxWidth = Math.round(Math.max(120, W - l - PAD)) + 'px';
+    }
+  },
+  /* 当前头像的实际位置（没拖过就量一下 CSS 默认位置） */
+  readPos() {
+    const box = this.shell();
+    const W = box.clientWidth || 1, H = box.clientHeight || 1;
+    const AV = this.AV;
+    if (this.pos) return { l: this.pos.lr * (W - AV), b: this.pos.br * (H - AV), W: W, H: H };
+    let l = 14, b = 150;
+    try {
+      /* 量头像本身，不量外层：贴右边时外层左边缘不等于头像左边缘 */
+      const r = $('#buddyAv').getBoundingClientRect(), br = box.getBoundingClientRect();
+      if (r.width) { l = r.left - br.left; b = br.bottom - r.bottom; }
+    } catch (e) { /* 用默认值 */ }
+    return { l: l, b: b, W: W, H: H };
+  },
+  moveTo(l, b) {
+    const box = this.shell();
+    const W = box.clientWidth || 0, H = box.clientHeight || 0;
+    if (!W || !H) return;
+    const AV = this.AV, PAD = this.PAD;
+    /* 先夹到和显示一致的范围再换算成比例，存下来的位置就是眼睛看到的位置 */
+    const l2 = this.clamp(l, PAD, Math.max(PAD, W - AV - PAD));
+    const b2 = this.clamp(b, PAD, Math.max(PAD, H - AV - PAD));
+    this.pos = {
+      lr: this.clamp(l2 / Math.max(1, W - AV), 0, 1),
+      br: this.clamp(b2 / Math.max(1, H - AV), 0, 1)
+    };
+    this.applyPos();
+  },
+
+  /* 双击（手机上是双击/双指连点两下）关掉陪伴，给个一键恢复 */
+  async closeByUser() {
+    this.queue = [];
+    this.thinking = false;
+    this.on = false;
+    this.hide();
+    this.refresh();
+    this.syncForm();
+    await this.save();
+    toast('已收起他。想让他回来就点这里，或去「设置 → 角色陪伴」', {
+      duration: 6000,
+      action: '让他回来',
+      onAction: async () => {
+        this.on = true;
+        await this.save();
+        this.syncForm();
+        this.refresh();
+        this.applyPos();
+      }
+    });
+  },
 
   syncForm() {
     const on = $('#buddyOn');
@@ -4805,6 +4911,7 @@ const Buddy = {
     const src = (r && r.avatar) || defaultAvatar(r ? r.name : '他', '#3a2f38');
     if (av && av.getAttribute('src') !== src) av.src = src;
     $('#buddyName').textContent = (r && r.name) || '他';
+    this.applyPos();
   },
 
   /* 他正在看哪件衣服：传衣服对象显示缩略图 + 名字，传 null 收起。
@@ -4846,16 +4953,23 @@ const Buddy = {
     if (!st) return;
     Array.prototype.slice.call(st.querySelectorAll('.buddy-line.typing-line')).forEach(n => n.remove());
   },
-  addLine(html, cls) {
+  addLine(html, cls, raw) {
     const st = this.stack();
     if (!st) return;
     Array.prototype.slice.call(st.children).forEach(n => n.classList.add('old'));
     const d = document.createElement('div');
     d.className = 'buddy-line' + (cls ? ' ' + cls : '');
+    if (raw) d.dataset.t = raw;
     d.innerHTML = html;
     st.appendChild(d);
     /* 最多留 4 条，旧的往上挤掉 */
     while (st.children.length > 4) st.removeChild(st.firstChild);
+  },
+  /* 这句是不是正挂在最后一条上（批量识图结束时会把最后那句再喊一次） */
+  tailIs(text) {
+    const st = this.stack();
+    const n = st && st.children.length ? st.children[st.children.length - 1] : null;
+    return !!(n && n.dataset && n.dataset.t === text);
   },
 
   /* item: { text }。还在说话就接着往下叠；安静过一阵再开口才清掉上一轮 */
@@ -4867,7 +4981,9 @@ const Buddy = {
     const st = this.stack();
     if (st && !el.classList.contains('talk')) st.innerHTML = '';
     this.dropTyping();
-    this.addLine(this.html(item.text));
+    /* 同一句已经挂在最后就不再贴一遍，只把停留时间续上，
+       免得出现两个一模一样的气泡 */
+    if (!this.tailIs(item.text)) this.addLine(this.html(item.text), '', item.text);
     el.classList.add('talk');
     const lastOne = !this.queue.length;
     const hold = Math.max(1600, Math.min(6000, 1100 + item.text.length * 95)) + (lastOne ? 2600 : 0);
@@ -4910,6 +5026,23 @@ const Buddy = {
     if (!busy) this.next();
   },
   spokeSince(ts) { return this.lastAt >= ts; },
+
+  /* 把某句重新亮出来（批量识图结束、抽屉收起时用）：
+     它要是还挂在气泡上，就只把停留时间续上，不再说第二遍。 */
+  resurface(text) {
+    const t = this.clean(text);
+    if (!t || !this.enabled()) return;
+    const el = $('#buddy');
+    if (el && el.classList.contains('talk') && this.tailIs(t)) {
+      this.refresh();
+      this.dropTyping();
+      clearTimeout(this.timer);
+      this.lastAt = Date.now();
+      this.timer = setTimeout(() => this.next(), 4200);
+      return;
+    }
+    this.say(text, { now: true });
+  },
 
   /* 等接口时显示「…」，像对方正在输入 */
   think() {
@@ -4981,6 +5114,94 @@ const Buddy = {
     else this.say(this.greetLine());
   }
 };
+
+/* 小头像的手势：按住拖动 / 单击 / 双击关闭。
+ * 用 pointer 事件，鼠标和触摸走同一套；拖过就不再当点击。 */
+function bindBuddyDrag(av) {
+  if (!av) return;
+  const MOVE = 6;          // 动了这么多像素才算拖，手指点按时的轻微抖动不算
+  const DOUBLE = 320;      // 两次点击间隔小于它算双击
+  let id = null, sx = 0, sy = 0, baseL = 0, baseB = 0, moved = false, lastTap = 0;
+
+  const wrap = () => $('#buddy');
+
+  const down = (e) => {
+    if (id !== null || (e.button != null && e.button > 0)) return;
+    const p = Buddy.readPos();
+    id = e.pointerId != null ? e.pointerId : 'm';
+    sx = e.clientX; sy = e.clientY;
+    baseL = p.l; baseB = p.b;
+    moved = false;
+    try { if (av.setPointerCapture && e.pointerId != null) av.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  };
+
+  const move = (e) => {
+    if (id === null) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (!moved && Math.abs(dx) < MOVE && Math.abs(dy) < MOVE) return;
+    if (!moved) {
+      moved = true;
+      Buddy.dragging = true;
+      const w = wrap();
+      if (w) w.classList.add('dragging');
+    }
+    e.preventDefault();
+    /* 往下拖 = bottom 变小，所以这里是减 */
+    Buddy.moveTo(baseL + dx, baseB - dy);
+  };
+
+  const up = async (e) => {
+    if (id === null) return;
+    id = null;
+    try { if (av.releasePointerCapture && e && e.pointerId != null) av.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    const w = wrap();
+    if (moved) {
+      Buddy.dragging = false;
+      if (w) w.classList.remove('dragging');
+      await Buddy.save();
+      return;                       // 拖完不触发点击
+    }
+    const now = Date.now();
+    if (now - lastTap < DOUBLE) {
+      lastTap = 0;
+      Buddy.closeByUser();
+      return;
+    }
+    lastTap = now;
+    Buddy.tapAvatar();
+  };
+
+  const cancel = () => {
+    if (id === null) return;
+    id = null;
+    Buddy.dragging = false;
+    const w = wrap();
+    if (w) w.classList.remove('dragging');
+    if (moved) Buddy.save();
+  };
+
+  if (window.PointerEvent) {
+    av.addEventListener('pointerdown', down);
+    av.addEventListener('pointermove', move, { passive: false });
+    av.addEventListener('pointerup', up);
+    av.addEventListener('pointercancel', cancel);
+  } else {
+    /* 老 WebView 没有 pointer 事件：退回 touch + mouse */
+    const t2p = (e) => { const t = e.changedTouches && e.changedTouches[0]; return t ? { clientX: t.clientX, clientY: t.clientY } : null; };
+    av.addEventListener('touchstart', (e) => { const p = t2p(e); if (p) down(p); }, { passive: true });
+    av.addEventListener('touchmove', (e) => { const p = t2p(e); if (p) { p.preventDefault = () => e.preventDefault(); move(p); } }, { passive: false });
+    av.addEventListener('touchend', (e) => { const p = t2p(e); up(p || {}); });
+    av.addEventListener('touchcancel', cancel);
+    av.addEventListener('mousedown', down);
+    window.addEventListener('mousemove', (e) => move(e));
+    window.addEventListener('mouseup', (e) => up(e));
+  }
+  /* 浏览器自带的拖拽图片 / 长按菜单会打断手势，关掉 */
+  av.addEventListener('dragstart', (e) => e.preventDefault());
+  av.addEventListener('contextmenu', (e) => { if (Buddy.dragging) e.preventDefault(); });
+  /* 转屏 / 键盘收起导致尺寸变化：把他拉回画面内 */
+  window.addEventListener('resize', () => Buddy.applyPos());
+}
 
 /* 给「顺带说一句」用的人设简介：完整人设太长，截一段够把口吻带出来 */
 function buddyPersona(role) {
@@ -6311,7 +6532,8 @@ function bind() {
     await Buddy.save();
     Buddy.refresh();
   };
-  $('#buddyAv').onclick = () => Buddy.tapAvatar();
+  /* 小头像：按住拖着走，单击收起/重播台词，双击收起他本人 */
+  bindBuddyDrag($('#buddyAv'));
   $('#buddyBub').onclick = () => { Buddy.queue = []; Buddy.hide(); };
 
   $('#visionMinus').onclick = () => { stepVision(-1); saveCfg(); };
