@@ -1506,9 +1506,14 @@
         <div class="setgrp">
           <h4>数据</h4>
           <button class="btn gh sm" style="margin-bottom:8px" id="btnCatMgr2">分类管理</button>
-          <button class="btn gh sm" style="margin-bottom:8px" id="btnExport2">导出全部数据</button>
-          <button class="btn gh sm" style="margin-bottom:8px" id="btnImport2">导入数据（换机迁移）</button>
+          <button class="btn gh sm" style="margin-bottom:8px" id="btnExport2">导出全部数据（整机备份）</button>
+          <button class="btn gh sm" style="margin-bottom:8px" id="btnImport2">导入备份（换机迁移）</button>
           <input type="file" id="importFile2" accept="application/json,.json" hidden>
+          <div class="hint" style="margin:2px 0 10px">
+            备份包含：衣服（含高清图）、搭配册、分类标签、角色和它们各自的设置、聊天记录、长期记忆、世界书、接口和天气等配置。
+            API Key 会单独问你要不要一起带。<br>
+            导入完整备份时可以选「完全恢复」（清空后还原，换手机用）或「只做补充」（衣服追加、只补本机没有的角色）。
+          </div>
           <button class="btn gh sm" style="margin-bottom:8px" id="btnInstallPwa">装到手机桌面</button>
           <div class="hint" id="storeInfo2" style="margin:2px 0 10px">读取中…</div>
 
@@ -1570,7 +1575,7 @@
     <div class="hint">所有字段都可以不填。想随手存图就一秒搞定，想精细打理再慢慢补标签。</div>
 
     <div class="f">
-      <label>衣物照片 <i>（可多选 / 拖拽 / Ctrl+V 粘贴，一次最多 20 张）</i></label>
+      <label>衣物照片 <i>（可多选 / 拖拽 / Ctrl+V 粘贴，一次最多 50 张）</i></label>
       <div class="drop" id="drop">
         <p>点这里选图，或把图片拖进来 / 直接粘贴<br>
           自动生成缩略图 300px + 高清图 1080px，体积砍掉约 95%</p>
@@ -1702,8 +1707,8 @@
       看到多少可以在「设置 → 衣橱联动」里调。
     </div>
     <button class="btn gh sm" style="margin-bottom:8px" id="btnCatMgr">分类管理</button>
-    <button class="btn gh sm" style="margin-bottom:8px" id="btnExport">导出衣橱数据（my_closet.json）</button>
-    <button class="btn gh sm" style="margin-bottom:8px" id="btnImport">导入衣橱数据（换机迁移）</button>
+    <button class="btn gh sm" style="margin-bottom:8px" id="btnExport">导出全部数据（整机备份）</button>
+    <button class="btn gh sm" style="margin-bottom:8px" id="btnImport">导入备份（换机迁移）</button>
     <input type="file" id="importFile" accept="application/json,.json" hidden>
     <button class="btn gh" id="moreDone">关闭</button>
   </div>
@@ -1771,6 +1776,19 @@
     </div>
     <div id="installSteps"></div>
     <button class="btn gh" id="installDone" style="margin-top:14px">知道了</button>
+  </div>
+
+  <!-- 抽屉：二选一（导出带不带 Key、导入怎么恢复…都用它）
+       比系统 confirm 好在：两个选项都写清楚了，取消就是真的取消，不会稀里糊涂执行一个 -->
+  <div class="drawer" id="dwChoose">
+    <div class="grip"></div>
+    <h2 id="chooseTitle">请选择</h2>
+    <div class="hint" id="chooseHint"></div>
+    <button class="btn pri" id="chooseA">A</button>
+    <div class="hint" id="chooseAHint" style="margin:7px 0 14px"></div>
+    <button class="btn gh" id="chooseB">B</button>
+    <div class="hint" id="chooseBHint" style="margin:7px 0 14px"></div>
+    <button class="btn gh" id="chooseCancel">取消</button>
   </div>
 
   <!-- 抽屉：世界书条目 -->
@@ -2309,7 +2327,7 @@ const Bridge = {
     await Chat.pushCard(rid, card, fallbackText);
   },
 
-  /* 选图：一次最多多选 20 张 */
+  /* 选图：系统选择器不限张数，真正的上限在 ingest() 里按 UPLOAD_MAX 收 */
   pickImages() {
     return new Promise((resolve) => {
       const input = document.createElement('input');
@@ -3873,9 +3891,48 @@ async function hardDel(id) {
 function openDw(sel) { $('#mask').classList.add('open'); $(sel).classList.add('open'); }
 function closeDw() {
   RoleEditor.session++;
+  Chooser.settle(null);        // 关抽屉（含点遮罩）就等于取消二选一
   $('#mask').classList.remove('open');
   $$('.drawer').forEach(d => d.classList.remove('open'));
 }
+
+/* 二选一抽屉。比 confirm() 好在两个选项都能写清楚，
+ * 而且「取消」是真的取消——confirm 的取消键会被当成另一个选项，很容易误操作。
+ * 用法：const r = await Chooser.ask({...})；返回 'a' / 'b' / null(取消) */
+const Chooser = {
+  resolve: null,
+  settle(v) {
+    const r = this.resolve;
+    this.resolve = null;
+    if (r) r(v);
+  },
+  ask(opt) {
+    opt = opt || {};
+    this.settle(null);                  // 上一次没关干净的话先收尾
+    $('#chooseTitle').textContent = opt.title || '请选择';
+    const setHint = (sel, txt) => {
+      const el = $(sel);
+      el.textContent = txt || '';
+      el.style.display = txt ? '' : 'none';
+    };
+    setHint('#chooseHint', opt.hint);
+    $('#chooseA').textContent = opt.a || '确定';
+    setHint('#chooseAHint', opt.aHint);
+    $('#chooseB').textContent = opt.b || '取消';
+    setHint('#chooseBHint', opt.bHint);
+    $('#chooseCancel').textContent = opt.cancel || '取消';
+    closeDw();
+    openDw('#dwChoose');
+    return new Promise(res => { this.resolve = res; });
+  },
+  pick(v) {
+    /* 先收起抽屉再交卷：closeDw 里的 settle(null) 就不会把结果盖成取消 */
+    const r = this.resolve;
+    this.resolve = null;
+    closeDw();
+    if (r) r(v);
+  }
+};
 
 function drawCatSelect() {
   const sel = $('#fCat');
@@ -6032,32 +6089,86 @@ function buildWardrobeList(limitChars) {
 }
 
 
-/* ------------------------- 14. 导出 / 导入 ------------------------- */
+/* ------------------------- 14. 导出 / 导入 -------------------------
+ * 导出的是「全量备份」：衣橱 + 角色（含各自私人设置）+ 聊天 + 记忆 + 世界书 + 全局配置。
+ * 换手机时这一个文件就够了。API Key 单独问一次要不要带。
+ * 老版本只导衣橱（version 3），导入时照样认，当成「只有衣橱」处理。 */
+const BACKUP_VERSION = 4;
+
 async function exportAll() {
-  const t = toast('正在打包高清图…', { loading: true });
+  if (roleSwitchBlocked()) return;
+  let withKey = false;
+  if (AI.key) {
+    const pick = await Chooser.ask({
+      title: '备份里要不要带 API Key？',
+      hint: '其它内容（衣服、角色、聊天、设置）两种都一样会导出，只差这一个 Key。',
+      a: '带上 Key',
+      aHint: '换手机后不用重新填接口。但这个文件就等于你的钥匙，别发给别人、别传网盘。',
+      b: '不带 Key',
+      bHint: '更安全。导入后自己再填一次 Key 就行，Base URL 和模型名还是会帮你带过去。',
+      cancel: '先不导出'
+    });
+    if (pick === null) return toast('已取消导出');
+    withKey = pick === 'a';
+  }
+  const t = toast('正在打包…', { loading: true });
   try {
-    const items = [];
-    for (const it of S.items) {
-      const full = await Store.get('im:' + it.id);
-      items.push(Object.assign({}, it, { full: full || '' }));
-    }
+    /* 先把内存里的落盘，保证导出的是最新的 */
+    await Roles.save();
+    await Chat.persist();
+
+    const all = await Store.all();
+    const items = S.items.map(it => Object.assign({}, it, { full: all['im:' + it.id] || '' }));
+    /* 把 msg:xxx / mem:xxx / wb:xxx 收成 { 角色id: 内容 } */
+    const pick = (prefix) => {
+      const out = {};
+      Object.keys(all).forEach(k => {
+        if (k.indexOf(prefix) !== 0) return;
+        const v = dec(all[k], null);
+        if (v != null) out[k.slice(prefix.length)] = v;
+      });
+      return out;
+    };
+    const ai = Object.assign({}, AI);
+    if (!withKey) ai.key = '';
+    ai.autoResolved = '';
+
     const payload = {
       app: 'boudoir-closet',
-      version: 3,
+      version: BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
+      hasKey: withKey,
+      /* 衣橱 */
       cats: S.cats,
       pool: normalizePool(S.pool),
       items: items,
-      looks: S.looks
+      looks: S.looks,
+      /* 角色（settings 里带着「我是谁」「聊天外观」「聊天风格」）+ 聊天 / 记忆 / 世界书 */
+      roles: { list: Roles.list, activeId: Roles.activeId },
+      chats: pick('msg:'),
+      mems: pick('mem:'),
+      wbs: pick('wb:'),
+      /* 全局配置 */
+      ai: ai,
+      presets: MyPresets,
+      wx: Weather.cfg,
+      buddy: { on: Buddy.on, who: Buddy.who, pos: Buddy.pos }
     };
+
     const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    const d = new Date();
+    const stamp = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'my_closet.json';
+    a.download = 'boudoir_backup_' + stamp + '.json';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     t.close();
-    toast('已导出 ' + items.length + ' 件');
+    const roleN = (payload.roles.list || []).length;
+    const msgN = Object.keys(payload.chats).reduce((n, k) => n + (payload.chats[k] || []).length, 0);
+    toast('已导出：' + items.length + ' 件衣服、' + payload.looks.length + ' 套搭配、'
+      + roleN + ' 位角色、' + msgN + ' 条对话'
+      + (withKey ? '（含 Key，注意保管）' : '（不含 Key）'), { duration: 6000 });
   } catch (e) {
     t.close();
     toast('导出失败：' + ((e && e.message) || e));
@@ -6065,10 +6176,55 @@ async function exportAll() {
 }
 
 async function importAll(file) {
+  if (roleSwitchBlocked()) return;
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch (e) {
+    return toast('读不出这个文件，可能不是 JSON 或者损坏了');
+  }
+  const hasCloset = data && Array.isArray(data.items);
+  const hasRoles = !!(data && data.roles && Array.isArray(data.roles.list));
+  if (!hasCloset && !hasRoles) return toast('这个文件不是本 App 的备份');
+
+  /* 完整备份：先问清是「整机恢复」还是「只补充」，两种差别很大 */
+  let replace = false;
+  if (hasRoles) {
+    const roleN = data.roles.list.length;
+    const msgN = Object.keys(data.chats || {}).reduce((n, k) => n + ((data.chats[k] || []).length), 0);
+    const pick = await Chooser.ask({
+      title: '这份备份怎么导入？',
+      hint: '备份里有 ' + ((data.items || []).length) + ' 件衣服、' + roleN + ' 位角色、' + msgN + ' 条对话。'
+        + (data.hasKey ? '（含 API Key）' : ''),
+      a: '完全恢复',
+      aHint: '先清掉这台设备上现有的全部数据，再按备份还原。换手机、重装用这个。',
+      b: '只做补充',
+      bHint: '衣服追加进现有衣柜，只补上本机没有的角色（连它们的聊天一起）。你现在的角色、聊天和设置都不动。',
+      cancel: '先不导入'
+    });
+    if (pick === null) return toast('已取消导入');
+    replace = pick === 'a';
+    if (replace) {
+      const sure = await Chooser.ask({
+        title: '确认要完全恢复吗？',
+        hint: '这台设备上现有的衣服、角色、聊天记录会被清空，然后替换成备份里的内容。这一步没有后悔药。',
+        a: '清空并恢复',
+        aHint: '我确定，本机现在的数据不用留。',
+        b: '改成只做补充',
+        bHint: '保留本机数据，只把备份里缺的补进来。',
+        cancel: '先不导入'
+      });
+      if (sure === null) return toast('已取消导入');
+      replace = sure === 'a';
+    }
+  }
+
   const t = toast('正在导入…', { loading: true });
   try {
-    const data = JSON.parse(await file.text());
-    if (!data || !Array.isArray(data.items)) { t.close(); return toast('这个文件不是衣橱备份'); }
+    if (replace) {
+      await importReplace(data, t);
+      return;
+    }
 
     if (Array.isArray(data.cats)) {
       const set = [];
@@ -6084,7 +6240,7 @@ async function importAll(file) {
     await saveCfg();
 
     let n = 0;
-    for (const raw of data.items) {
+    for (const raw of (data.items || [])) {
       const full = raw.full || '';
       const it = cleanItemTags(Object.assign({}, raw), data.pool);
       delete it.full;
@@ -6103,15 +6259,136 @@ async function importAll(file) {
         S.looks.push(l);
         await Store.set('lk:' + l.id, enc(l));
       }
-      S.looks.sort((a, b) => b.createdAt - a.createdAt);
+      S.looks.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     }
+
+    /* 只补充本机没有的角色：已存在的 id 一律跳过，不碰你现有的聊天 */
+    let roleAdd = 0, roleSkip = 0;
+    if (hasRoles) {
+      t.update('正在导入角色…');
+      for (const raw of data.roles.list) {
+        if (!raw || !raw.id) continue;
+        if (Roles.byId(raw.id)) { roleSkip++; continue; }
+        const r = Object.assign({}, raw);
+        if (!r.name) r.name = '他';
+        if (!r.avatar) r.avatar = defaultAvatar(r.name, '#3a2f38');
+        if (!r.bubble) r.bubble = '#1b1b20';
+        if (r.greeting == null) r.greeting = '';
+        ensureRoleSettings(r, false);
+        Roles.list.push(r);
+        const msgs = (data.chats || {})[raw.id];
+        if (Array.isArray(msgs) && msgs.length) await Store.set('msg:' + r.id, enc(msgs));
+        const mem = (data.mems || {})[raw.id];
+        if (Array.isArray(mem) && mem.length) await Store.set('mem:' + r.id, enc(mem));
+        const wb = (data.wbs || {})[raw.id];
+        if (Array.isArray(wb) && wb.length) await Store.set('wb:' + r.id, enc(wb));
+        roleAdd++;
+      }
+      if (roleAdd) {
+        if (!Roles.byId(Roles.activeId)) Roles.activeId = Roles.list[0].id;
+        await Roles.save();
+      }
+    }
+
     t.close();
     drawCats(); drawGrid(); drawStats(); drawLooks();
-    toast('已导入 ' + n + ' 件衣服');
+    if (roleAdd) { drawSettings(); drawChatList(); try { await drawChars(); } catch (e) { /* ignore */ } }
+    const msg = [];
+    if (n) msg.push('衣服 ' + n + ' 件');
+    if (roleAdd) msg.push('角色 ' + roleAdd + ' 位（连聊天一起）');
+    toast('已导入' + (msg.length ? '：' + msg.join('，') : '：没有新内容')
+      + (roleSkip ? '。有 ' + roleSkip + ' 位角色本机已存在，跳过了（你现在的聊天没被动过）' : ''),
+      { duration: roleSkip ? 6000 : 4000 });
   } catch (e) {
     t.close();
     console.error(e);
-    toast('导入失败，文件可能损坏了');
+    toast('导入失败：' + ((e && e.message) || '文件可能损坏了'));
+  }
+}
+
+/* 整机恢复：清掉现有数据，完全按备份写回，然后重载页面。
+ * 不在内存里一点点改状态——那样 Roles / Chat / Me / Look / WB / MEM 很容易残留，
+ * 清干净再 reload 最稳。 */
+async function importReplace(data, t) {
+  try {
+    t.update('正在清除现有数据…');
+    /* 本机的 Key：备份里没带 Key 时留着现在这个，别让人导完就连不上接口 */
+    const localKey = AI.key || '';
+    const all = await Store.all();
+    for (const k of Object.keys(all)) await Store.remove(k);
+
+    t.update('正在写入衣橱…');
+    const pool = normalizePool(data.pool);
+    await Store.set('cfg', enc({
+      cats: Array.isArray(data.cats) && data.cats.length ? data.cats : DEFAULT_CATS.slice(),
+      pool: pool,
+      charId: null,
+      fitMode: data.fitMode || 'text',
+      visionCount: data.visionCount || 6,
+      fitScope: data.fitScope || 'all'
+    }));
+
+    let n = 0;
+    for (const raw of (data.items || [])) {
+      const it = Object.assign({}, raw);
+      const full = it.full || '';
+      delete it.full;
+      if (!it.id) it.id = uid('it_');
+      if (typeof it.createdAt !== 'number') it.createdAt = Date.now();
+      it.isDeleted = !!it.isDeleted;
+      await Store.set('it:' + it.id, enc(it));
+      if (full) await Store.set('im:' + it.id, full);
+      n++;
+    }
+    for (const raw of (data.looks || [])) {
+      const l = Object.assign({}, raw);
+      if (!l.id) l.id = uid('lk_');
+      await Store.set('lk:' + l.id, enc(l));
+    }
+
+    t.update('正在写入角色和聊天…');
+    const list = ((data.roles && data.roles.list) || []).filter(r => r && r.id);
+    if (list.length) {
+      await Store.set('roles', enc({
+        list: list,
+        activeId: (data.roles.activeId && list.some(r => r.id === data.roles.activeId))
+          ? data.roles.activeId : list[0].id
+      }));
+    }
+    const put = async (prefix, map) => {
+      for (const id of Object.keys(map || {})) {
+        if (!list.some(r => r.id === id)) continue;    // 角色都没了的聊天就不留
+        const v = map[id];
+        if (v != null) await Store.set(prefix + id, enc(v));
+      }
+    };
+    await put('msg:', data.chats);
+    await put('mem:', data.mems);
+    await put('wb:', data.wbs);
+
+    t.update('正在写入设置…');
+    if (data.ai && typeof data.ai === 'object') {
+      const ai = Object.assign({}, data.ai);
+      if (!ai.key) ai.key = localKey;
+      ai.autoResolved = '';
+      await Store.set('ai:cfg', enc(ai));
+    }
+    if (Array.isArray(data.presets) && data.presets.length) await Store.set('ai:presets', enc(data.presets));
+    if (data.wx && typeof data.wx === 'object') await Store.set('wx:cfg', enc(data.wx));
+    if (data.buddy && typeof data.buddy === 'object') await Store.set('buddy:cfg', enc(data.buddy));
+
+    t.close();
+    const roleN = list.length;
+    alert('恢复完成：' + n + ' 件衣服、' + roleN + ' 位角色。\n'
+      + (data.ai && !data.ai.key && localKey ? '备份里没有 API Key，已保留这台设备原来填的那个。\n' : '')
+      + '点确定后页面会重新加载。');
+    location.reload();
+  } catch (e) {
+    t.close();
+    console.error('恢复失败', e);
+    alert('恢复中途失败了：' + ((e && e.message) || e)
+      + '\n\n数据可能只写了一部分。建议点确定后重新加载页面看看，'
+      + '或者再导入一次备份。');
   }
 }
 
@@ -6257,6 +6534,10 @@ function bind() {
   $('#fabChar').onclick = () => go('fitting');
 
   $('#mask').onclick = closeDw;
+  /* 二选一抽屉 */
+  $('#chooseA').onclick = () => Chooser.pick('a');
+  $('#chooseB').onclick = () => Chooser.pick('b');
+  $('#chooseCancel').onclick = () => Chooser.pick(null);
   $('#itemCancel').onclick = () => { S.pending = []; closeDw(); };
   $('#itemSave').onclick = saveItem;
   $('#btnAutoTag').onclick = autoTag;
@@ -6275,7 +6556,7 @@ function bind() {
   };
   $('#newCat').addEventListener('keydown', e => { if (e.key === 'Enter') addCat(); });
 
-  /* 上传：统一走 Bridge.pickImages（App 内自建 input，一次最多多选 20 张），
+  /* 上传：统一走 Bridge.pickImages（App 内自建 input，可多选），
      选完直接交给 ingest() 走统一的压缩 + 数量上限逻辑，跟拖拽/粘贴共用同一条路。 */
   $('#drop').onclick = async () => {
     try {
