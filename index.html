@@ -8641,16 +8641,34 @@ function buildAppIcon(size, maskable) {
 }
 
 async function initPwa() {
+  /* 监听先挂上，不等图标画完 */
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installEvt = e;
+  });
+  window.addEventListener('appinstalled', () => {
+    installEvt = null;
+    toast('装好了，去桌面看看');
+  });
+
   try {
     const iconAny = await buildAppIcon(512, false);
     const iconMask = await buildAppIcon(512, true);
     const icon = iconAny;
 
+    /* manifest 是 blob: 地址，相对路径（'./'、'/xxx'）没法相对它解析，
+     * Chrome 会判定 start_url / scope 无效，退回拿「当前打开的网址」当 App 身份。
+     * 结果同一个 App 换个网址打开（带 ?参数、/ 和 /index.html）就被当成另一个，
+     * 安装状态容易错乱。所以这里一律用绝对地址，并写死 id。 */
+    const appDir = new URL('./', location.href).href;
+    const startUrl = location.href.split(/[?#]/)[0];
+
     const mf = {
+      id: appDir,
       name: '私享衣橱',
       short_name: '衣橱',
-      start_url: location.pathname + location.search,
-      scope: './',
+      start_url: startUrl,
+      scope: appDir,
       display: 'standalone',
       orientation: 'portrait',
       background_color: '#0a0a0c',
@@ -8672,33 +8690,14 @@ async function initPwa() {
     document.head.appendChild(ai);
   } catch (e) { console.warn('manifest 注入失败', e); }
 
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    installEvt = e;
-  });
-
-  /* Service Worker：只有 http(s) 下才有意义，file:// 打开时跳过 */
+  /* Service Worker：只有 http(s) 下才有意义，file:// 打开时跳过。
+   * 浏览器不允许用 blob: 地址注册 SW，所以必须是一个真实文件：
+   * sw.js 要和 index.html 放在同一个目录。没传的话这里会 404，
+   * 只是没有离线缓存，其它功能照常。 */
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
-    const swCode = [
-      "const C='bc-v1';",
-      "self.addEventListener('install',e=>{self.skipWaiting()});",
-      "self.addEventListener('activate',e=>{e.waitUntil(self.clients.claim())});",
-      "self.addEventListener('fetch',e=>{",
-      "  const r=e.request;",
-      "  if(r.method!=='GET')return;",
-      "  const u=new URL(r.url);",
-      "  if(u.origin!==location.origin)return;",   // 跨域（AI 接口）完全放行
-      "  if(r.mode==='navigate'){",
-      "    e.respondWith(fetch(r).then(res=>{caches.open(C).then(c=>c.put(r,res.clone()));return res})",
-      "      .catch(()=>caches.match(r)));return;",
-      "  }",
-      "  e.respondWith(caches.match(r).then(hit=>hit||fetch(r).then(res=>{",
-      "    caches.open(C).then(c=>c.put(r,res.clone()));return res})));",
-      "});"
-    ].join('\n');
     try {
-      const url = URL.createObjectURL(new Blob([swCode], { type: 'text/javascript' }));
-      navigator.serviceWorker.register(url).catch(e => console.warn('SW 注册失败', e));
+      navigator.serviceWorker.register('./sw.js', { scope: './' })
+        .catch(e => console.warn('SW 注册失败（sw.js 有没有和 index.html 放在同一目录？）', e));
     } catch (e) { console.warn('SW 失败', e); }
   }
 }
@@ -8709,12 +8708,18 @@ async function promptInstall() {
   if (standalone) return toast('已经装好了——你现在用的就是桌面版');
 
   /* 安卓 / 桌面 Chrome：系统原生安装弹窗 */
+  /* Chrome 认为已经装过时根本不会给这个事件，那种情况走下面的图文引导（含死循环的解法） */
   if (installEvt) {
-    installEvt.prompt();
-    const r = await installEvt.userChoice.catch(() => null);
-    installEvt = null;
-    if (r && r.outcome === 'accepted') toast('装好了，去桌面看看');
-    else toast('没关系，想装的时候再点一次');
+    const evt = installEvt;
+    installEvt = null;                 // 这个事件只能 prompt 一次
+    try {
+      await evt.prompt();
+      const r = await evt.userChoice.catch(() => null);
+      if (r && r.outcome === 'accepted') toast('正在安装，装好后桌面会出现「衣橱」');
+      else toast('没关系，想装的时候再点一次');
+    } catch (e) {
+      openInstallGuide();
+    }
     return;
   }
   openInstallGuide();
@@ -8761,7 +8766,8 @@ function openInstallGuide() {
       + step('2', '选「安装应用」或「添加到主屏幕」',
         '不同浏览器叫法不一样：Chrome 叫「安装应用」，其它的多半叫「添加到主屏幕」。')
       + step('3', '确认', '桌面上就会出现图标。')
-      + tip('如果菜单里找不到这一项，多半是网址不是 https 开头。');
+      + tip('如果菜单里找不到这一项，多半是网址不是 https 开头。')
+      + androidStuck();
   } else {
     h = step('1', '看地址栏右侧',
       'Chrome / Edge 在地址栏右边会有一个<b>带下箭头的小屏幕</b>图标，点它就能装。')
@@ -8780,6 +8786,25 @@ function openInstallGuide() {
   }
   function tip(t) {
     return '<div class="hint" style="margin:10px 0 0">' + t + '</div>';
+  }
+  /* 安卓常见死循环：桌面图标被系统清掉了，但 App 本体（WebAPK）还留在系统里
+   * （被停用/冻结/归档/藏起来），Chrome 照样认为「已安装」，不再给安装弹窗，
+   * 点「打开应用」又起不来。网页没法替系统卸载它，只能把路指清楚。 */
+  function androidStuck() {
+    return '<details style="margin-top:14px;font-size:12px;line-height:1.75;color:var(--text-sub)">'
+      + '<summary style="cursor:pointer;color:#fff;font-size:12.5px">'
+      + '桌面图标没了，Chrome 却说「已安装」、点打开又打不开？</summary>'
+      + '<div style="padding-top:8px">'
+      + '这是手机系统把桌面图标清掉了，但 App 本体还留在系统里（被停用、冻结、归档或藏起来了），'
+      + 'Chrome 以为它还在，就卡成了死循环。<b>你的数据存在 Chrome 里，不在那个 App 里</b>，按下面做不会丢。<br><br>'
+      + '<b>① 先备份：</b>设置 → 数据 →「导出全部数据」，以防万一。<br>'
+      + '<b>② 找到它：</b>先在桌面的应用抽屉 / 全局搜索里搜「衣橱」；没有的话进手机'
+      + '「设置 → 应用（应用管理）」，右上角打开「显示系统应用 / 全部应用」，搜「衣橱」或「私享衣橱」。'
+      + '小米 / 华为 / 荣耀 / OPPO / vivo 还要看看「隐藏应用」「应用冻结」「应用分身」「纯净模式」这些地方。<br>'
+      + '<b>③ 处理：</b>显示「已停用 / 已冻结 / 已归档」的，点「启用 / 恢复」；其它情况直接「卸载」。<br>'
+      + '<b>④ 重装：</b>把 Chrome 彻底关掉（多任务里划掉），重新打开这个网址，再点一次「装到手机桌面」。<br><br>'
+      + '实在找不到也不要紧：就在 Chrome 里用，功能和数据跟桌面版完全一样。'
+      + '</div></details>';
   }
   function urlRow() {
     return '<div class="f" style="margin-top:10px">'
