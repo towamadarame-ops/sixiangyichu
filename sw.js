@@ -7,7 +7,9 @@
  *     所以有网时永远是最新版，不会出现「代码改了手机上还是旧的」。
  *   - 同源的其它 GET 资源：同上。
  *   - 跨域请求（AI 接口、天气、反查城市）：完全不碰，直接放行。
- *   - 非 GET（POST 等）：不碰。
+ *   - 从相册「分享」过来的图（POST 到 SHARE_ACTION）：接住存进专用缓存，再把页面打开成 ?share=1，
+ *     页面那边由 index.html 的 takeSharedImages() 取走。
+ *   - 其它非 GET（POST 等）：不碰。
  *
  * 改了这里的缓存逻辑就把 VERSION 改一下，新 SW 接管时会清掉旧缓存。
  * 缓存名带上了 scope，同一个域名下的其它版本（比如根目录那份）互不清理。
@@ -16,6 +18,12 @@ const VERSION = 'v1';
 const SCOPE = self.registration.scope;              // 形如 https://xxx.github.io/repo/DEV/
 const PREFIX = 'boudoir|' + SCOPE + '|';
 const CACHE = PREFIX + VERSION;
+
+/* 下面两个名字必须跟 index.html 里的 SHARE_ACTION / shareCacheName() 一致。
+ * 分享缓存不以 PREFIX 开头，所以 SW 升级清旧缓存时不会把还没取走的图删掉。 */
+const SHARE_ACTION = 'share-target';
+const SHARE_PATH = new URL(SHARE_ACTION, SCOPE).pathname;
+const SHARE_CACHE = 'boudoir-share|' + SCOPE;
 
 /* 首次安装就先存一份首页，这样装完立刻断网也能打开 */
 self.addEventListener('install', (e) => {
@@ -39,9 +47,14 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
+  const url = new URL(req.url);
+
+  if (req.method === 'POST' && url.origin === self.location.origin && url.pathname === SHARE_PATH) {
+    e.respondWith(receiveShare(req));
+    return;
+  }
   if (req.method !== 'GET') return;
 
-  const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;  // 跨域完全放行
   if (url.href.indexOf(SCOPE) !== 0) return;        // 不归这个目录管的也放行
 
@@ -97,4 +110,33 @@ function offlinePage(key) {
         { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       ))
   );
+}
+
+/* 接住从相册分享过来的图片。
+ * 页面这时还没打开，没法直接把图交过去，所以先存进 SHARE_CACHE，
+ * 再 303 跳到 ?share=1，页面启动后自己来取。
+ * 只留最新这一次分享：上次没取走的先清掉，免得哪天突然冒出一堆旧图。 */
+async function receiveShare(req) {
+  try {
+    const form = await req.formData();
+    const files = form.getAll('photos').filter(f => f && typeof f === 'object' && f.size);
+    await caches.delete(SHARE_CACHE);
+    if (files.length) {
+      const c = await caches.open(SHARE_CACHE);
+      const stamp = Date.now();
+      await Promise.all(files.map((f, i) => c.put(
+        SCOPE + '__share__/' + stamp + '-' + String(i).padStart(3, '0'),
+        new Response(f, {
+          headers: {
+            /* 有些相册给的文件没有类型，分享菜单本来就只收图片，按 jpeg 兜底 */
+            'Content-Type': f.type || 'image/jpeg',
+            'X-File-Name': encodeURIComponent(f.name || '')
+          }
+        })
+      )));
+    }
+  } catch (err) {
+    /* 收不到就当没分享，页面照常打开，那边会提示「没收到图片」 */
+  }
+  return Response.redirect(SCOPE + '?share=1', 303);
 }

@@ -2860,6 +2860,19 @@ const Store = (() => {
       const map = {};
       mem.forEach((v, k) => { map[k] = v; });
       return map;
+    },
+    /* 只拿键名不拿内容。导出时靠它按需逐个读，免得把全部高清图一次读进内存 */
+    async keys() {
+      if (driver === 'indexedDB') return (await idbRun('readonly', s => s.getAllKeys())) || [];
+      if (driver === 'localStorage') {
+        const out = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const kk = localStorage.key(i);
+          if (kk && kk.indexOf(LS_PREFIX) === 0) out.push(kk.slice(LS_PREFIX.length));
+        }
+        return out;
+      }
+      return Array.from(mem.keys());
     }
   };
 })();
@@ -6117,23 +6130,26 @@ async function exportAll() {
     await Roles.save();
     await Chat.persist();
 
-    const all = await Store.all();
-    const items = S.items.map(it => Object.assign({}, it, { full: all['im:' + it.id] || '' }));
-    /* 把 msg:xxx / mem:xxx / wb:xxx 收成 { 角色id: 内容 } */
-    const pick = (prefix) => {
-      const out = {};
-      Object.keys(all).forEach(k => {
-        if (k.indexOf(prefix) !== 0) return;
-        const v = dec(all[k], null);
-        if (v != null) out[k.slice(prefix.length)] = v;
-      });
-      return out;
-    };
+    /* 把 msg:xxx / mem:xxx / wb:xxx 收成 { 角色id: 内容 }。
+     * 只按键名逐个读这几类，不再 Store.all() 把整库（尤其是全部高清图）一次读进内存 */
+    const keys = await Store.keys();
+    const chats = {}, mems = {}, wbs = {};
+    const boxes = [['msg:', chats], ['mem:', mems], ['wb:', wbs]];
+    let chatChars = 0;
+    for (const k of keys) {
+      const hit = boxes.find(b => k.indexOf(b[0]) === 0);
+      if (!hit) continue;
+      const raw = await Store.get(k);
+      if (hit[1] === chats) chatChars += Backup.size(raw);
+      const v = dec(raw, null);
+      if (v != null) hit[1][k.slice(hit[0].length)] = v;
+    }
     const ai = Object.assign({}, AI);
     if (!withKey) ai.key = '';
     ai.autoResolved = '';
 
-    const payload = {
+    /* 除衣服以外的部分，跟以前的备份字段完全一样 */
+    const head = {
       app: 'boudoir-closet',
       version: BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
@@ -6141,13 +6157,12 @@ async function exportAll() {
       /* 衣橱 */
       cats: S.cats,
       pool: normalizePool(S.pool),
-      items: items,
       looks: S.looks,
       /* 角色（settings 里带着「我是谁」「聊天外观」「聊天风格」）+ 聊天 / 记忆 / 世界书 */
       roles: { list: Roles.list, activeId: Roles.activeId },
-      chats: pick('msg:'),
-      mems: pick('mem:'),
-      wbs: pick('wb:'),
+      chats: chats,
+      mems: mems,
+      wbs: wbs,
       /* 全局配置 */
       ai: ai,
       presets: MyPresets,
@@ -6155,19 +6170,42 @@ async function exportAll() {
       buddy: { on: Buddy.on, who: Buddy.who, pos: Buddy.pos }
     };
 
-    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    /* 衣服（带高清图）是大头，一件一件读、一件一件转成文字，
+     * 每攒够约 4MB 就封成一个小 Blob 交给浏览器保管，手上的字符串随即释放。
+     * 以前是整个备份先拼成一个几十 MB 的大字符串，衣服多了手机内存顶不住会卡死 / 闪退。
+     * 拼出来的仍是同一种 JSON（"items" 只是挪到了最后，导入不看字段顺序），老备份、新备份互相都能导。 */
+    const list = S.items;
+    const parts = [];
+    let batch = [], batchLen = 0;
+    const push = (s) => {
+      batch.push(s); batchLen += s.length;
+      if (batchLen > 4000000) { parts.push(new Blob(batch)); batch = []; batchLen = 0; }
+    };
+    push(JSON.stringify(head).slice(0, -1) + ',"items":[');
+    for (let i = 0; i < list.length; i++) {
+      if (i % 10 === 0) t.update('正在打包衣服 ' + (i + 1) + ' / ' + list.length + '…');
+      const full = await Store.get('im:' + list[i].id);
+      push((i ? ',' : '') + JSON.stringify(Object.assign({}, list[i], { full: full || '' })));
+    }
+    push(']}');
+    parts.push(new Blob(batch));
+
+    const blob = new Blob(parts, { type: 'application/json' });
     const d = new Date();
     const stamp = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'boudoir_backup_' + stamp + '.json';
     a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    /* 文件大时手机要一会儿才开始写盘，地址别太早作废 */
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     t.close();
-    const roleN = (payload.roles.list || []).length;
-    const msgN = Object.keys(payload.chats).reduce((n, k) => n + (payload.chats[k] || []).length, 0);
-    toast('已导出：' + items.length + ' 件衣服、' + payload.looks.length + ' 套搭配、'
-      + roleN + ' 位角色、' + msgN + ' 条对话'
+    await Backup.mark(Backup.sig(chatChars));
+    drawStoreInfo();
+    const roleN = (head.roles.list || []).length;
+    const msgN = Object.keys(chats).reduce((n, k) => n + (chats[k] || []).length, 0);
+    toast('已导出：' + list.length + ' 件衣服、' + head.looks.length + ' 套搭配、'
+      + roleN + ' 位角色、' + msgN + ' 条对话（' + fmtBytes(blob.size) + '）'
       + (withKey ? '（含 Key，注意保管）' : '（不含 Key）'), { duration: 6000 });
   } catch (e) {
     t.close();
@@ -6377,6 +6415,16 @@ async function importReplace(data, t) {
     if (data.wx && typeof data.wx === 'object') await Store.set('wx:cfg', enc(data.wx));
     if (data.buddy && typeof data.buddy === 'object') await Store.set('buddy:cfg', enc(data.buddy));
 
+    /* 刚按备份还原，本机数据就等于那份备份，记成「已备份」，免得一打开就催你备份 */
+    let chatChars = 0;
+    Object.keys(data.chats || {}).forEach(id => {
+      if (data.chats[id] != null && list.some(r => r.id === id)) chatChars += enc(data.chats[id]).length;
+    });
+    await Store.set(Backup.KEY, enc({
+      at: Date.parse(data.exportedAt) || Date.now(),
+      it: n, lk: (data.looks || []).length, ch: chatChars, quiet: 0
+    }));
+
     t.close();
     const roleN = list.length;
     alert('恢复完成：' + n + ' 件衣服、' + roleN + ' 位角色。\n'
@@ -6451,11 +6499,123 @@ function drawStoreInfo() {
     'localStorage': 'localStorage（降级模式，只有约 5MB，建议少存大图）',
     'memory': '内存模式（当前浏览器不让存，刷新就丢，先别录入重要数据）'
   };
-  const txt = '存储：' + (map[Store.driver] || Store.driver)
+  const base = '存储：' + (map[Store.driver] || Store.driver)
     + '。照片和 API Key 都只在这台设备上，不上传任何服务器。';
-  const a = $('#storeInfo'); if (a) a.textContent = txt;
-  const b = $('#storeInfo2'); if (b) b.textContent = txt;
+  const paint = (lines) => {
+    const html = [escHtml(base)].concat(lines).join('<br>');
+    const a = $('#storeInfo'); if (a) a.innerHTML = html;
+    const b = $('#storeInfo2'); if (b) b.innerHTML = html;
+  };
+  paint([Backup.line()]);
+  if (Store.driver === 'memory') return;
+  /* 占用空间、持久状态要异步查，查到再补上 */
+  Persist.info()
+    .then(st => paint(Persist.lines(st).concat(Backup.line())))
+    .catch(() => {});
 }
+
+function fmtBytes(n) {
+  if (!(n >= 0)) return '?';
+  if (n < 1048576) return Math.round(n / 1024) + ' KB';
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+  return (n / 1073741824).toFixed(1) + ' GB';
+}
+
+/* 持久存储。
+ * 默认情况下浏览器只是「尽量」保留网站数据，手机空间紧张时可能整个清掉（衣服照片、聊天全在里面）。
+ * 申请成功后就不会被自动清理（用户自己去清除网站数据除外）。
+ * Chrome 不弹窗，按「装没装到桌面 / 常不常用」自己决定给不给，所以每次启动都问一次，
+ * 哪天条件够了就拿到了；Firefox 会弹一次询问，答过就记住。 */
+const Persist = {
+  async request() {
+    const st = navigator.storage;
+    if (!st || typeof st.persisted !== 'function' || Store.driver === 'memory') return null;
+    try {
+      if (await st.persisted()) return true;
+      return typeof st.persist === 'function' ? !!(await st.persist()) : false;
+    } catch (e) { return null; }
+  },
+  async info() {
+    const st = navigator.storage;
+    const out = { usage: null, quota: null, persisted: null };
+    if (!st) return out;
+    try {
+      if (typeof st.estimate === 'function') {
+        const e = await st.estimate();
+        out.usage = e.usage; out.quota = e.quota;
+      }
+    } catch (e) { /* 查不到就不显示 */ }
+    try { if (typeof st.persisted === 'function') out.persisted = await st.persisted(); } catch (e) { /* 同上 */ }
+    return out;
+  },
+  lines(st) {
+    const out = [];
+    if (typeof st.usage === 'number') {
+      out.push('已用 ' + fmtBytes(st.usage)
+        + (st.quota ? '，浏览器给的上限约 ' + fmtBytes(st.quota) : '') + '。');
+    }
+    if (st.persisted === true) {
+      out.push('持久保存：<b>已开启</b>，手机清理空间时系统不会自动删这里的数据。');
+    } else if (st.persisted === false) {
+      out.push('<span style="color:#ff9b9b">持久保存：未开启，手机空间紧张时浏览器可能自动清掉这里的数据。</span>'
+        + '装到桌面并经常打开，Chrome 一般会自动开启；在那之前请定期导出备份。');
+    }
+    return out;
+  }
+};
+
+/* 备份提醒。数据只在这台设备上，丢了就真没了。
+ * 记下上次导出时的「衣服数 / 搭配数 / 聊天记录长度」，下次打开时对比：
+ *   - 从没备份过                    → 提醒
+ *   - 有变化，且距上次 ≥ 7 天        → 提醒
+ *   - 上次之后新增了 ≥ 20 件衣服     → 不等 7 天也提醒
+ * 提醒是一条带「现在备份」按钮的轻提示；提醒过一次就隔 2 天再说，不会每次打开都弹。 */
+const Backup = {
+  KEY: 'bak:cfg',
+  DAY: 86400000,
+  cfg: { at: 0, it: 0, lk: 0, ch: 0, quiet: 0 },
+  async load() {
+    try {
+      this.cfg = Object.assign({ at: 0, it: 0, lk: 0, ch: 0, quiet: 0 }, dec(await Store.get(this.KEY), null) || {});
+    } catch (e) { /* 读不到就当没备份过 */ }
+  },
+  async save() {
+    try { await Store.set(this.KEY, enc(this.cfg)); } catch (e) { /* 存不进去只是少个提醒 */ }
+  },
+  /* 聊天记录按存储里的原始字符数算，不用逐条解析，启动时几乎不花时间 */
+  size(v) { return v == null ? 0 : (typeof v === 'string' ? v.length : enc(v).length); },
+  sig(chatChars) { return { it: S.items.length, lk: S.looks.length, ch: chatChars || 0 }; },
+  async mark(sig, at) {
+    Object.assign(this.cfg, sig, { at: at || Date.now(), quiet: 0 });
+    await this.save();
+  },
+  line() {
+    if (!this.cfg.at) return '上次备份：<b>还没导出过</b>。';
+    const days = Math.floor((Date.now() - this.cfg.at) / this.DAY);
+    const d = new Date(this.cfg.at);
+    return '上次备份：' + (days <= 0 ? '今天' : days + ' 天前')
+      + '（' + (d.getMonth() + 1) + '月' + d.getDate() + '日）。';
+  },
+  async maybeRemind(cur) {
+    const c = this.cfg, now = Date.now();
+    if (!cur.it && !cur.lk && cur.ch < 5000) return;     // 还没什么数据，不打扰
+    if (c.quiet && now < c.quiet) return;
+    let msg = '';
+    if (!c.at) {
+      msg = '衣橱还没备份过。数据只存在这台手机上，建议导出一份';
+    } else {
+      const days = Math.floor((now - c.at) / this.DAY);
+      const added = cur.it - c.it;
+      const changed = cur.it !== c.it || cur.lk !== c.lk || cur.ch !== c.ch;
+      if (added >= 20) msg = '上次备份后新增了 ' + added + ' 件衣服，建议再导出一份';
+      else if (changed && days >= 7) msg = '距上次备份已经 ' + days + ' 天了，建议再导出一份';
+    }
+    if (!msg) return;
+    c.quiet = now + 2 * this.DAY;
+    await this.save();
+    toast(msg, { action: '现在备份', onAction: exportAll, duration: 10000 });
+  }
+};
 
 /* 顶栏那颗小药丸：显示接口状态，一眼知道能不能用 AI */
 function drawEnvPill() {
@@ -8613,6 +8773,45 @@ function bindChat() {
 /* ------------------------- 16.7 PWA ------------------------- */
 let installEvt = null;
 
+/* ---- 从相册「分享」进来 ----
+ * 流程：相册里选图 → 分享 → 衣橱 → 浏览器把图片 POST 到 SHARE_ACTION
+ *       → sw.js 接住，存进专用缓存，再把页面打开成「?share=1」
+ *       → 这里取出来交给 ingest()，跟手动选图走同一条路（压缩、50 张上限都一样）。
+ * SHARE_ACTION 和缓存名必须跟 sw.js 里的保持一致。 */
+const SHARE_ACTION = 'share-target';
+function shareCacheName() { return 'boudoir-share|' + new URL('./', location.href).href; }
+
+/* 返回 true 表示这次是分享进来的（不管最后收没收到图） */
+async function takeSharedImages() {
+  if (!/[?&]share=1(&|$)/.test(location.search)) return false;
+  /* 先把网址里的 ?share=1 抹掉，免得刷新一下又导一遍 */
+  try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* 抹不掉也不要紧 */ }
+  if (!('caches' in window)) return true;
+
+  const name = shareCacheName();
+  const files = [];
+  try {
+    const c = await caches.open(name);
+    const reqs = (await c.keys()).sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+    for (const r of reqs) {
+      const res = await c.match(r);
+      if (!res) continue;
+      const blob = await res.blob();
+      let fname = '';
+      try { fname = decodeURIComponent(res.headers.get('X-File-Name') || ''); } catch (e) { /* 名字坏了就不要了 */ }
+      files.push(new File([blob], fname || ('shared_' + files.length + '.jpg'), { type: blob.type || 'image/jpeg' }));
+    }
+  } finally {
+    /* 取完就删，不管成没成功，免得下次打开又冒出来 */
+    try { await caches.delete(name); } catch (e) { /* ignore */ }
+  }
+  if (!files.length) { toast('没收到图片，再分享一次试试'); return true; }
+  go('closet');
+  openItem(null);
+  await ingest(files);
+  return true;
+}
+
 /* 桌面图标：把 logo 画到 canvas 再导出 PNG。
  * 为什么不直接用那张 JPEG：
  *   1) 有些平台的 manifest 只认 PNG
@@ -8649,6 +8848,8 @@ async function initPwa() {
   window.addEventListener('appinstalled', () => {
     installEvt = null;
     toast('装好了，去桌面看看');
+    /* 装到桌面后 Chrome 一般就肯给持久存储了，趁热再要一次 */
+    Persist.request().then(() => drawStoreInfo()).catch(() => {});
   });
 
   try {
@@ -8661,7 +8862,10 @@ async function initPwa() {
      * 结果同一个 App 换个网址打开（带 ?参数、/ 和 /index.html）就被当成另一个，
      * 安装状态容易错乱。所以这里一律用绝对地址，并写死 id。 */
     const appDir = new URL('./', location.href).href;
-    const startUrl = location.href.split(/[?#]/)[0];
+    /* 「…/」和「…/index.html」是同一个页面，统一成目录地址，
+     * 免得从分享跳回来（落在目录地址）时 start_url 跟着变来变去 */
+    const here = location.href.split(/[?#]/)[0];
+    const startUrl = /\/(index\.html?)?$/i.test(here) ? appDir : here;
 
     const mf = {
       id: appDir,
@@ -8678,6 +8882,17 @@ async function initPwa() {
         { src: iconMask, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
       ]
     };
+    /* 出现在手机相册的「分享」菜单里：选几张图 → 分享 → 衣橱，直接进入上传识图。
+     * 图片是 POST 过来的，由 sw.js 接住存好再把页面打开成 ?share=1，见 takeSharedImages()。
+     * 只有装到桌面（安卓 Chrome）后才会出现在分享菜单里。 */
+    if (location.protocol.indexOf('http') === 0) {
+      mf.share_target = {
+        action: appDir + SHARE_ACTION,
+        method: 'POST',
+        enctype: 'multipart/form-data',
+        params: { files: [{ name: 'photos', accept: ['image/*'] }] }
+      };
+    }
     const blob = new Blob([JSON.stringify(mf)], { type: 'application/manifest+json' });
     const link = document.createElement('link');
     link.rel = 'manifest';
@@ -8831,6 +9046,7 @@ async function boot() {
   go('closet');
 
   /* 再加载数据，失败只降级并提示，不中断 */
+  let bootSig = null;          // 本次启动时的数据指纹，给备份提醒用；读档失败就是 null，不提醒
   try {
     await Store.init();
     const all = await Store.all();
@@ -8858,6 +9074,7 @@ async function boot() {
     const savedAI = dec(all['ai:cfg'], null);
     if (savedAI && typeof savedAI === 'object') AI = Object.assign(AI, savedAI);
 
+    let chatChars = 0;
     Object.keys(all).forEach(k => {
       if (k.indexOf('it:') === 0) {
         const it = dec(all[k], null);
@@ -8865,6 +9082,8 @@ async function boot() {
       } else if (k.indexOf('lk:') === 0) {
         const l = dec(all[k], null);
         if (l && l.id) S.looks.push(l);
+      } else if (k.indexOf('msg:') === 0) {
+        chatChars += Backup.size(all[k]);
       }
     });
     S.items.forEach(i => { if (typeof i.createdAt !== 'number') i.createdAt = 0; });
@@ -8896,6 +9115,8 @@ async function boot() {
     await Roles.save();
     await saveCfg();
     await Buddy.load();
+    await Backup.load();
+    bootSig = Backup.sig(chatChars);
   } catch (e) {
     console.error('读取存档失败', e);
     toast('读取存档失败，这次以空衣橱启动（已有数据没有被删）', { duration: 5000 });
@@ -8926,6 +9147,13 @@ async function boot() {
   hideSplash(260);
 
   initPwa();
+
+  /* 申请持久存储，结果出来后刷新一下设置页里的状态 */
+  Persist.request().then(() => drawStoreInfo()).catch(() => {});
+
+  /* 从相册分享过来的图优先处理；这次没有分享才看要不要提醒备份，免得两件事挤在一起 */
+  const shared = await takeSharedImages().catch(e => { console.warn('读取分享的图片失败', e); return false; });
+  if (bootSig && !shared) setTimeout(() => { Backup.maybeRemind(bootSig).catch(() => {}); }, 2500);
 }
 
 /* 收开屏。做成独立函数是因为启动失败时也要收，否则用户对着 logo 干等。 */
